@@ -1,0 +1,1587 @@
+<!DOCTYPE html>
+<html lang="it" class="h-full bg-[#f8fafc] text-slate-800 antialiased">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChronoRename Studio - Rinomina Fotografica EXIF Pro</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#f5f3ff',
+              100: '#ede9fe',
+              200: '#ddd6fe',
+              500: '#6366f1',
+              600: '#4f46e5',
+              700: '#4338ca',
+            },
+            surface: {
+              DEFAULT: '#ffffff',
+              subtle: '#f8fafc',
+              muted: '#f1f5f9',
+              border: '#e2e8f0',
+            }
+          },
+          boxShadow: {
+            'subtle': '0 1px 2px 0 rgba(0, 0, 0, 0.03)',
+            'card': '0 10px 30px -10px rgba(0, 0, 0, 0.04), 0 2px 6px -2px rgba(0, 0, 0, 0.02)',
+            'float': '0 20px 40px -15px rgba(0, 0, 0, 0.08), 0 0 1px 1px rgba(0, 0, 0, 0.04)',
+            'glow-emerald': '0 4px 20px -2px rgba(16, 185, 129, 0.25)',
+            'glow-brand': '0 4px 20px -2px rgba(79, 70, 229, 0.25)',
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Exifr Full Bundle (Parses EXIF, XMP, IPTC, TIFF, DNG, HEIC, SubSec) -->
+  <script src="https://cdn.jsdelivr.net/npm/exifr@7.1.3/dist/full.umd.js"></script>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <style>
+    /* Refined modern scrollbars */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    
+    .drag-active {
+      border-color: #4f46e5 !important;
+      background-color: #f5f3ff !important;
+      box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.12) !important;
+    }
+
+    .segment-active {
+      background-color: #ffffff;
+      color: #0f172a;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    }
+  </style>
+</head>
+<body class="min-h-full flex flex-col bg-[#f8fafc] text-slate-800 selection:bg-brand-600 selection:text-white antialiased">
+
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-slate-200/80 bg-white/80 backdrop-blur-xl sticky top-0 z-30 transition-all">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      
+      <!-- Brand & Status -->
+      <div class="flex items-center gap-3.5">
+        <div class="relative shrink-0">
+          <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-slate-900 via-indigo-950 to-brand-600 flex items-center justify-center shadow-md shadow-brand-600/10 ring-1 ring-black/5">
+            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/>
+            </svg>
+          </div>
+          <span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"></span>
+        </div>
+
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <h1 class="text-sm font-bold tracking-tight text-slate-900 whitespace-nowrap">
+              ChronoRename <span class="text-brand-600 font-extrabold">Studio</span>
+            </h1>
+            <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap">
+              v1.0 Pro
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-400 font-medium tracking-tight truncate">Ordinamento cronologico ad alta precisione EXIF & XMP</p>
+        </div>
+      </div>
+
+      <!-- Action Utilities -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- Add More Photos button in header -->
+        <button id="btnAddMoreHeader" class="hidden text-xs font-semibold text-brand-700 hover:text-brand-800 px-3 py-1.5 rounded-xl border border-brand-200 bg-brand-50/70 hover:bg-brand-100 transition-all items-center gap-1.5 shadow-subtle whitespace-nowrap">
+          <svg class="w-3.5 h-3.5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+          </svg>
+          <span>Aggiungi Foto</span>
+        </button>
+
+        <button id="btnHelp" class="text-xs font-semibold text-slate-600 hover:text-slate-900 px-3 py-1.5 rounded-xl border border-slate-200/90 bg-white hover:bg-slate-50 transition-all flex items-center gap-1.5 shadow-subtle whitespace-nowrap">
+          <svg class="w-3.5 h-3.5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span class="hidden sm:inline">Guida e Funzionamento</span>
+        </button>
+
+        <button id="btnClearAll" class="hidden text-xs font-semibold text-rose-600 hover:text-rose-700 px-3 py-1.5 rounded-xl border border-rose-200 bg-rose-50/60 hover:bg-rose-100/70 transition-all items-center gap-1.5 shadow-subtle whitespace-nowrap">
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+          </svg>
+          <span>Nuovo Set</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full flex flex-col gap-6">
+
+    <!-- Upload Hero Zone (Multi-format initial drop) -->
+    <div id="dropZone" class="group relative rounded-3xl border-2 border-dashed border-slate-300 hover:border-brand-500 bg-white p-12 text-center transition-all duration-300 cursor-pointer shadow-card hover:shadow-float overflow-hidden">
+      
+      <!-- Background subtle grid pattern -->
+      <div class="absolute inset-0 bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:16px_16px] opacity-60 pointer-events-none"></div>
+      
+      <input type="file" id="fileInput" multiple accept="image/jpeg,image/jpg,image/heic,image/heif,image/tiff,image/x-adobe-dng,.dng,.tif,.tiff,.heic,.jpg,.jpeg" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20">
+      
+      <div class="relative z-10 flex flex-col items-center justify-center gap-4 pointer-events-none">
+        <div class="w-20 h-20 rounded-3xl bg-slate-50 group-hover:bg-brand-50 border border-slate-200 group-hover:border-brand-200 flex items-center justify-center text-slate-400 group-hover:text-brand-600 group-hover:scale-105 transition-all duration-300 shadow-sm">
+          <svg class="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.6" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+        </div>
+
+        <div>
+          <h2 class="text-lg font-bold text-slate-900 tracking-tight">
+            Trascina qui tutti i file dello shooting fotografico
+          </h2>
+          <p class="text-xs sm:text-sm text-slate-500 mt-1 max-w-md mx-auto">
+            Supporta JPEG, DNG, TIFF e HEIC da Evoto, Lightroom o reflex/mirrorless multiple.
+          </p>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-center gap-2 pt-2">
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+            ⚡ Precisione Millisecondi (Burst)
+          </span>
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+             Script Mac Istantaneo
+          </span>
+          <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-slate-100 text-slate-700 border border-slate-200">
+            ⇅ Ordine Cronologico o Manuale
+          </span>
+        </div>
+
+        <!-- Initial Sort Preference Toggle -->
+        <div class="pt-2 z-30 relative pointer-events-auto" onclick="event.stopPropagation()">
+          <div class="bg-slate-100/90 backdrop-blur p-1 rounded-xl border border-slate-200 inline-flex items-center gap-1 text-xs font-semibold shadow-2xs">
+            <button type="button" id="btnInitialSortExif" class="px-3 py-1.5 rounded-lg segment-active flex items-center gap-1.5 transition-all cursor-pointer">
+              <svg class="w-3.5 h-3.5 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <span>Cronologico EXIF</span>
+            </button>
+            <button type="button" id="btnInitialSortManual" class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 flex items-center gap-1.5 transition-all cursor-pointer">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 6h16M4 12h10M4 18h7m9-7l3 3m0 0l-3 3m3-3h-8"/></svg>
+              <span>Ordine di Trascinamento</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Processing / Loading State -->
+    <div id="processingIndicator" class="hidden bg-white border border-slate-200 rounded-2xl p-6 shadow-card space-y-3">
+      <div class="flex items-center justify-between text-xs">
+        <div class="flex items-center gap-2.5 font-semibold text-slate-800">
+          <svg class="w-4 h-4 text-brand-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <span id="progressText">Analisi avanzata metadati EXIF / XMP / SubSec in corso...</span>
+        </div>
+        <span id="progressPercentage" class="font-mono text-brand-600 font-bold bg-brand-50 border border-brand-100 px-2 py-0.5 rounded-md">0%</span>
+      </div>
+      <div class="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden p-0.5 border border-slate-200/60">
+        <div id="progressBar" class="bg-gradient-to-r from-brand-600 to-indigo-500 h-full w-0 rounded-full transition-all duration-150"></div>
+      </div>
+    </div>
+
+    <!-- Duplicate Collision Alert Banner -->
+    <div id="collisionAlertBanner" class="hidden bg-rose-50 border border-rose-200 rounded-2xl p-4 text-rose-800 shadow-card flex items-start gap-3.5">
+      <div class="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center font-bold shrink-0 text-base">
+        ⚠️
+      </div>
+      <div class="flex-1 text-xs">
+        <div class="font-bold text-rose-900 text-sm">Rilevato conflitto nei nomi dei file!</div>
+        <p class="mt-0.5 text-rose-700" id="collisionAlertMessage">
+          Due o più foto riceverebbero lo stesso identico nome di destinazione. Modifica il prefisso o la numerazione per evitare sovrascritture.
+        </p>
+      </div>
+    </div>
+
+    <!-- Workspace Deck -->
+    <div id="workspace" class="hidden flex-col gap-6">
+
+      <!-- Top Summary Metrics Bar -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-subtle flex flex-col justify-between">
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Foto Caricate</span>
+          <div class="flex items-baseline gap-2 mt-1">
+            <span id="statTotalPhotos" class="text-xl font-extrabold text-slate-900">0</span>
+            <span class="text-xs text-slate-400 font-medium">file</span>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-subtle flex flex-col justify-between">
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Tag EXIF Rilevati</span>
+          <div class="flex items-baseline gap-2 mt-1">
+            <span id="statExifCount" class="text-xl font-extrabold text-indigo-600">0</span>
+            <span class="text-xs text-emerald-600 font-semibold">100% scatto reale</span>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-subtle flex flex-col justify-between">
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Corpi Macchina</span>
+          <div class="flex items-baseline gap-2 mt-1">
+            <span id="statCameraCount" class="text-xl font-extrabold text-slate-900">1</span>
+            <span class="text-xs text-slate-400 font-medium" id="statCameraLabel">camera rilevata</span>
+          </div>
+        </div>
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-subtle flex flex-col justify-between">
+          <span class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Intervallo Scatti</span>
+          <div class="mt-1">
+            <span id="statTimeSpan" class="text-xs font-mono font-semibold text-slate-800 truncate block">--:--</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Integrated Compact Dropzone to Add More Photos -->
+      <div id="compactAddDropZone" class="group relative rounded-2xl border-2 border-dashed border-slate-300 hover:border-brand-500 bg-white hover:bg-brand-50/40 p-4 transition-all duration-200 cursor-pointer shadow-subtle flex flex-col sm:flex-row items-center justify-between gap-3 overflow-hidden">
+        <input type="file" id="addMoreFileInput" multiple accept="image/jpeg,image/jpg,image/heic,image/heif,image/tiff,image/x-adobe-dng,.dng,.tif,.tiff,.heic,.jpg,.jpeg" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10">
+        
+        <div class="flex items-center gap-3.5 pointer-events-none">
+          <div class="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 border border-brand-200/80 flex items-center justify-center font-bold text-base shrink-0 group-hover:scale-110 group-hover:bg-brand-600 group-hover:text-white transition-all">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+            </svg>
+          </div>
+          <div>
+            <span class="text-xs font-bold text-slate-900 group-hover:text-brand-700 transition-colors flex items-center gap-2">
+              Aggiungi altre foto al set corrente
+              <span class="text-[10px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200">Trascina o Clicca</span>
+            </span>
+            <span class="text-[11px] text-slate-500 block mt-0.5">I nuovi file verranno analizzati, uniti al set e riordinati cronologicamente in automatico</span>
+          </div>
+        </div>
+
+        <div class="pointer-events-none self-end sm:self-auto shrink-0">
+          <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-white text-brand-700 border border-brand-200/80 group-hover:bg-brand-600 group-hover:text-white group-hover:border-brand-600 transition-all shadow-subtle">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+            Sfoglia File...
+          </span>
+        </div>
+      </div>
+
+      <!-- Main Config Studio Deck -->
+      <div class="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 shadow-card space-y-6">
+        
+        <!-- Header & Direction Segmented Pill -->
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-100">
+          <div>
+            <h2 class="text-base font-bold text-slate-900 flex items-center gap-2.5">
+              <span class="w-7 h-7 rounded-xl bg-brand-50 text-brand-600 border border-brand-200/70 flex items-center justify-center font-extrabold text-xs">
+                1
+              </span>
+              Schema di Rinomina Batch
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">Configura il prefisso e la numerazione progressiva ad alta leggibilità</p>
+          </div>
+
+          <!-- Chrono & Manual Order Segmented Control -->
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2.5 self-start sm:self-auto">
+            <div class="bg-slate-100 p-1 rounded-xl border border-slate-200/80 inline-flex items-center gap-1 text-xs font-semibold">
+              <button id="btnSortAsc" class="px-3.5 py-1.5 rounded-lg transition-all flex items-center gap-1.5 segment-active whitespace-nowrap cursor-pointer">
+                <svg class="w-3.5 h-3.5 text-brand-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/>
+                </svg>
+                <span>Dal primo scatto</span>
+              </button>
+              <button id="btnSortDesc" class="px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M3 4h13M3 8h9m-9 4h9m5-4v12m0 0l-4-4m4 4l4-4"/>
+                </svg>
+                <span>Inverso</span>
+              </button>
+              <button id="btnSortManual" class="px-3.5 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer">
+                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2" d="M4 6h16M4 12h10M4 18h7m9-7l3 3m0 0l-3 3m3-3h-8"/>
+                </svg>
+                <span>Manuale / Inserimento</span>
+              </button>
+            </div>
+            <span id="manualOrderHint" class="hidden text-[11px] font-medium text-brand-700 bg-brand-50 border border-brand-200/80 px-2.5 py-1 rounded-lg items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 text-brand-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              Trascina le righe o usa ▲ / ▼ per ordinare
+            </span>
+          </div>
+        </div>
+
+        <!-- Pattern Controls Grid - Perfectly uniform h-11 controls and aligned labels -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+          
+          <!-- Prefix Input -->
+          <div class="flex flex-col justify-end space-y-1.5">
+            <label class="block text-xs font-bold text-slate-700 tracking-tight h-4 leading-none">Prefisso / Nome Servizio</label>
+            <input type="text" id="inputPrefix" value="Servizio" placeholder="es. Matrimonio-Mario-Elena" class="w-full h-11 bg-slate-50 hover:bg-slate-50/80 focus:bg-white border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 rounded-xl px-3.5 text-sm font-medium text-slate-900 transition outline-none box-border">
+          </div>
+
+          <!-- Start Index & Padding in a compact duo -->
+          <div class="grid grid-cols-2 gap-2.5">
+            <div class="flex flex-col justify-end space-y-1.5">
+              <label class="block text-xs font-bold text-slate-700 tracking-tight h-4 leading-none whitespace-nowrap">Inizio Da</label>
+              <input type="number" id="inputStartIndex" value="1" min="0" class="w-full h-11 bg-slate-50 hover:bg-slate-50/80 focus:bg-white border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 rounded-xl px-3 text-sm font-mono font-medium text-slate-900 transition outline-none box-border">
+            </div>
+            <div class="flex flex-col justify-end space-y-1.5">
+              <label class="block text-xs font-bold text-slate-700 tracking-tight h-4 leading-none whitespace-nowrap truncate">Padding Cifre</label>
+              <select id="selectPadding" class="w-full h-11 bg-slate-50 hover:bg-slate-50/80 focus:bg-white border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 rounded-xl px-3 text-sm font-mono font-medium text-slate-900 transition outline-none cursor-pointer box-border">
+                <option value="3" selected>3 (001)</option>
+                <option value="4">4 (0001)</option>
+                <option value="5">5 (00001)</option>
+                <option value="2">2 (01)</option>
+                <option value="1">1 (1)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Separator -->
+          <div class="flex flex-col justify-end space-y-1.5">
+            <label class="block text-xs font-bold text-slate-700 tracking-tight h-4 leading-none">Separatore</label>
+            <select id="selectSeparator" class="w-full h-11 bg-slate-50 hover:bg-slate-50/80 focus:bg-white border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 rounded-xl px-3.5 text-sm font-medium text-slate-900 transition outline-none cursor-pointer box-border">
+              <option value="-" selected>Trattino ( - )</option>
+              <option value="_">Underscore ( _ )</option>
+              <option value=" ">Spazio ( )</option>
+              <option value="">Nessuno</option>
+            </select>
+          </div>
+
+          <!-- Extension Case -->
+          <div class="flex flex-col justify-end space-y-1.5">
+            <label class="block text-xs font-bold text-slate-700 tracking-tight h-4 leading-none">Estensione File</label>
+            <select id="selectCase" class="w-full h-11 bg-slate-50 hover:bg-slate-50/80 focus:bg-white border border-slate-200 focus:border-brand-500 focus:ring-4 focus:ring-brand-500/10 rounded-xl px-3.5 text-sm font-medium text-slate-900 transition outline-none cursor-pointer box-border">
+              <option value="keep" selected>Mantieni originale (.jpg / .dng / .heic)</option>
+              <option value="jpg">.jpg (forza minuscolo)</option>
+              <option value="JPG">.JPG (forza maiuscolo)</option>
+            </select>
+          </div>
+
+        </div>
+
+        <!-- Live Syntax Ribbon Banner -->
+        <div class="rounded-2xl bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950 p-4 text-white flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-md">
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-white/10 flex items-center justify-center text-indigo-300 shrink-0">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+              </svg>
+            </div>
+            <div>
+              <div class="text-[11px] text-slate-400 font-semibold uppercase tracking-wider">Esempio del primo file risultante</div>
+              <div class="flex items-center gap-2 font-mono text-sm sm:text-base font-bold text-emerald-400">
+                <span id="patternLiveSample">Servizio-001.jpg</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="text-right text-xs text-slate-300 font-medium self-end sm:self-center">
+            Pronto per elaborare <span id="photoCountBadge" class="font-bold text-white font-mono bg-white/20 px-2 py-0.5 rounded-md">0</span> fotografie
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Action Card: Mac Terminal Instant Execution Engine -->
+      <div class="bg-white border border-slate-200 rounded-3xl p-6 sm:p-7 shadow-card space-y-6">
+        
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+          <div class="flex items-center gap-3">
+            <span class="w-7 h-7 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-200/70 flex items-center justify-center font-extrabold text-xs">
+              2
+            </span>
+            <div>
+              <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+                Generatore Comandi Terminale Mac
+                <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Istantaneo</span>
+              </h2>
+              <p class="text-xs text-slate-500">Esegui la rinomina istantanea direttamente nella cartella di origine</p>
+            </div>
+          </div>
+
+          <!-- High-End Copy Button -->
+          <button id="btnCopyTerminal" class="group bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs font-bold px-5 py-3 rounded-2xl shadow-glow-emerald hover:shadow-emerald-600/30 transition-all flex items-center justify-center gap-2 cursor-pointer">
+            <svg class="w-4 h-4 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3"/>
+            </svg>
+            <span id="copyBtnText">Copia Solo Comandi</span>
+          </button>
+        </div>
+
+        <!-- 3-Step Guided Flow -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+          <div class="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-4 flex gap-3.5 items-start">
+            <div class="w-6 h-6 rounded-lg bg-slate-900 text-white font-mono font-bold text-xs flex items-center justify-center shrink-0">
+              1
+            </div>
+            <div>
+              <div class="text-xs font-bold text-slate-900">Apri il Terminale</div>
+              <p class="text-[11px] text-slate-500 mt-0.5">Premi <kbd class="px-1 py-0.5 bg-white border border-slate-200 rounded font-mono text-[10px] text-slate-700 font-semibold shadow-2xs">⌘ Spazio</kbd>, digita <em>Terminale</em> e premi Invio.</p>
+            </div>
+          </div>
+
+          <div class="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-4 flex gap-3.5 items-start">
+            <div class="w-6 h-6 rounded-lg bg-slate-900 text-white font-mono font-bold text-xs flex items-center justify-center shrink-0">
+              2
+            </div>
+            <div>
+              <div class="text-xs font-bold text-slate-900">Posizionati nella Cartella</div>
+              <p class="text-[11px] text-slate-500 mt-0.5">Scrivi <code class="text-emerald-700 bg-emerald-50 border border-emerald-200/60 px-1 py-0.5 rounded font-mono font-bold text-[11px]">cd </code> con uno spazio e trascina la cartella dentro.</p>
+            </div>
+          </div>
+
+          <div class="bg-slate-50/80 border border-slate-200/80 rounded-2xl p-4 flex gap-3.5 items-start">
+            <div class="w-6 h-6 rounded-lg bg-slate-900 text-white font-mono font-bold text-xs flex items-center justify-center shrink-0">
+              3
+            </div>
+            <div>
+              <div class="text-xs font-bold text-slate-900">Incolla ed Esegui</div>
+              <p class="text-[11px] text-slate-500 mt-0.5">Incolla i comandi (<kbd class="px-1 py-0.5 bg-white border border-slate-200 rounded font-mono text-[10px] text-slate-700 font-semibold shadow-2xs">⌘V</kbd>) e premi <strong>Invio</strong>.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Terminal Output Code Box with 2-Way Mode Switcher -->
+        <div class="relative bg-slate-950 border border-slate-800 rounded-2xl overflow-hidden shadow-inner">
+          <div class="bg-slate-900/90 px-4 py-2.5 border-b border-slate-800 flex flex-wrap items-center justify-between gap-2 text-[11px] font-mono text-slate-400">
+            
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-500/80"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-amber-500/80"></span>
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></span>
+              
+              <!-- Script Mode Segmented Switch -->
+              <div class="bg-slate-800/90 p-0.5 rounded-lg inline-flex items-center gap-1 ml-2 text-[10px]">
+                <button id="btnScriptModeRename" class="px-3 py-1 rounded-md bg-brand-600 text-white font-bold transition cursor-pointer">
+                  1. Rinomina (mv)
+                </button>
+                <button id="btnScriptModeUndo" class="px-3 py-1 rounded-md text-slate-400 hover:text-white font-bold transition cursor-pointer">
+                  2. Ripristino Nomi (Undo)
+                </button>
+              </div>
+            </div>
+
+            <div class="flex items-center gap-3">
+              <span id="commandLineCount" class="text-slate-400 font-medium">0 righe</span>
+            </div>
+          </div>
+          
+          <div class="p-4 max-h-48 overflow-y-auto font-mono text-xs text-emerald-400 leading-relaxed select-all">
+            <pre id="bashPreviewCode" class="text-slate-200 font-mono">mv -n "foto_1.jpg" "Servizio-001.jpg"</pre>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Preview Sequence & Metadata Studio Table -->
+      <div class="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-card">
+        
+        <!-- Table Header & View Switcher -->
+        <div class="px-6 py-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4 bg-white">
+          <div class="flex items-center gap-3">
+            <span class="w-7 h-7 rounded-xl bg-brand-50 text-brand-600 border border-brand-200/70 flex items-center justify-center font-extrabold text-xs">
+              3
+            </span>
+            <div>
+              <h3 class="text-base font-bold text-slate-900">Sequenza Finale & Ordinamento</h3>
+              <p class="text-xs text-slate-500">Trascina le righe o usa ▲ / ▼ per personalizzare la sequenza di rinomina</p>
+            </div>
+          </div>
+
+          <!-- View Switcher -->
+          <div class="bg-slate-100 p-1 rounded-xl border border-slate-200/80 inline-flex items-center gap-1 text-xs font-semibold">
+            <button id="viewListBtn" class="px-3 py-1.5 rounded-lg segment-active flex items-center gap-1.5 transition-all cursor-pointer">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+              <span>Elenco</span>
+            </button>
+            <button id="viewGridBtn" class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 flex items-center gap-1.5 transition-all cursor-pointer">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+              <span>Griglia</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Table View Container -->
+        <div id="tableViewContainer" class="overflow-x-auto max-h-[580px]">
+          <table class="w-full text-left text-xs">
+            <thead class="bg-slate-50/90 text-slate-500 sticky top-0 z-10 backdrop-blur-md border-b border-slate-200/80 font-bold uppercase tracking-wider text-[10px]">
+              <tr>
+                <th class="py-3.5 px-3 w-24 text-center">Ordine</th>
+                <th class="py-3.5 px-3 w-16">Foto</th>
+                <th class="py-3.5 px-4">Nome Originale</th>
+                <th class="py-3.5 px-4 text-brand-700">Data e Ora Scatto (ms)</th>
+                <th class="py-3.5 px-4 text-emerald-700">Nuovo Nome Assegnato</th>
+                <th class="py-3.5 px-4">Fotocamera</th>
+                <th class="py-3.5 px-4 text-right">Dimensione</th>
+              </tr>
+            </thead>
+            <tbody id="photoTableBody" class="divide-y divide-slate-100 text-slate-700 font-medium">
+              <!-- Rendered rows -->
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Grid View Container -->
+        <div id="gridViewContainer" class="hidden p-6 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4 max-h-[580px] overflow-y-auto bg-slate-50/50">
+          <!-- Rendered grid cards -->
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Metadata Inspector Modal -->
+    <div id="metadataInspectorModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-white border border-slate-200 rounded-3xl max-w-xl w-full max-h-[85vh] flex flex-col shadow-float overflow-hidden">
+        
+        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/50">
+          <div class="flex items-center gap-2.5">
+            <div class="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+              🔍
+            </div>
+            <div>
+              <h3 class="font-bold text-slate-900 text-sm">Ispettore Metadati Fotografici</h3>
+              <p id="inspectFilename" class="font-mono text-[11px] text-slate-500 truncate max-w-[280px]"></p>
+            </div>
+          </div>
+          <button id="btnCloseInspector" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-sm font-bold transition cursor-pointer">&times;</button>
+        </div>
+
+        <div class="p-6 overflow-y-auto flex-1 space-y-4">
+          
+          <!-- Key summary cards -->
+          <div class="grid grid-cols-2 gap-3">
+            <div class="bg-indigo-50/60 border border-indigo-100 p-3.5 rounded-2xl">
+              <span class="text-[10px] font-bold text-indigo-600 uppercase tracking-wider block">Data Scatto (con frazioni)</span>
+              <span id="inspectParsedDate" class="text-xs font-mono font-bold text-indigo-950 mt-1 block"></span>
+            </div>
+            <div class="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl">
+              <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">Fotocamera Rilevata</span>
+              <span id="inspectCameraModel" class="text-xs font-semibold text-slate-800 mt-1 block truncate">--</span>
+            </div>
+          </div>
+
+          <div class="space-y-1.5">
+            <span class="text-[11px] font-bold text-slate-700 block">Sorgente esatta del timestamp:</span>
+            <div id="inspectDateSource" class="bg-slate-100 border border-slate-200 px-3 py-2 rounded-xl text-xs font-mono text-slate-700 break-all"></div>
+          </div>
+
+          <div class="space-y-1.5">
+            <span class="text-[11px] font-bold text-slate-700 block">Dump Metadati EXIF/XMP:</span>
+            <pre id="inspectRawJson" class="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-slate-300 font-mono text-[11px] max-h-56 overflow-auto leading-relaxed"></pre>
+          </div>
+        </div>
+
+        <div class="p-4 border-t border-slate-200 bg-slate-50/70 flex justify-end">
+          <button id="btnCloseInspectorBtn" class="bg-slate-900 hover:bg-slate-800 text-white font-semibold px-5 py-2.5 rounded-xl text-xs transition cursor-pointer">
+            Chiudi Scheda
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Help Modal -->
+    <div id="helpModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div class="bg-white border border-slate-200 rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-float">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+          <div class="flex items-center gap-2">
+            <span class="text-lg">💡</span>
+            <h3 class="font-bold text-slate-900 text-base">Guida alle Funzionalità</h3>
+          </div>
+          <button id="btnCloseHelp" class="w-8 h-8 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center font-bold text-sm transition cursor-pointer">&times;</button>
+        </div>
+
+        <div class="text-xs text-slate-600 space-y-3 leading-relaxed">
+          <p>
+            <strong>• Precisione Millisecondi:</strong> Per le raffiche continue (burst shot), l'app legge automaticamente <code class="bg-slate-100 px-1 py-0.5 rounded font-mono">SubSecTimeOriginal</code> per mantenere le foto esattamente nell'ordine di cattura.
+          </p>
+          <p>
+            <strong>• Ordine Manuale & Sequenza di Rilascio:</strong> Puoi impostare <em>Manuale / Inserimento</em> per assegnare la numerazione in base all'ordine in cui rilasci le foto nel programma. Puoi inoltre riordinare liberamente qualsiasi foto trascinando le righe della tabella o cliccando i pulsanti ▲ / ▼.
+          </p>
+          <p>
+            <strong>• Rollback / Undo:</strong> Se vuoi ritornare ai nomi originali, passa alla scheda <em>2. Ripristino Nomi</em> e incolla il comando nel Terminale.
+          </p>
+        </div>
+
+        <div class="pt-2">
+          <button id="btnCloseHelpBtn" class="w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold py-3 rounded-2xl text-xs transition cursor-pointer">
+            Ho capito, torna all'app
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 bg-slate-900/95 text-white border border-slate-800 backdrop-blur-md px-4 py-3 rounded-2xl shadow-float transform translate-y-20 opacity-0 transition-all duration-300 text-xs flex items-center gap-3">
+      <span id="toastIcon" class="text-base">✅</span>
+      <span id="toastMsg" class="font-semibold">Notifica</span>
+    </div>
+
+  </main>
+
+  <script>
+    /* Application State */
+    let photos = [];
+    let sortDirection = 'ASC';
+    let scriptMode = 'rename'; // 'rename', 'undo'
+
+    /* DOM Elements */
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('fileInput');
+    const compactAddDropZone = document.getElementById('compactAddDropZone');
+    const addMoreFileInput = document.getElementById('addMoreFileInput');
+    const btnAddMoreHeader = document.getElementById('btnAddMoreHeader');
+
+    const workspace = document.getElementById('workspace');
+    const photoTableBody = document.getElementById('photoTableBody');
+    const gridViewContainer = document.getElementById('gridViewContainer');
+    const tableViewContainer = document.getElementById('tableViewContainer');
+    const photoCountBadge = document.getElementById('photoCountBadge');
+    const patternLiveSample = document.getElementById('patternLiveSample');
+    const bashPreviewCode = document.getElementById('bashPreviewCode');
+    const commandLineCount = document.getElementById('commandLineCount');
+    const btnClearAll = document.getElementById('btnClearAll');
+    const processingIndicator = document.getElementById('processingIndicator');
+    const progressBar = document.getElementById('progressBar');
+    const progressPercentage = document.getElementById('progressPercentage');
+    const progressText = document.getElementById('progressText');
+
+    /* Collision Alert Banner */
+    const collisionAlertBanner = document.getElementById('collisionAlertBanner');
+    const collisionAlertMessage = document.getElementById('collisionAlertMessage');
+
+    /* Stats */
+    const statTotalPhotos = document.getElementById('statTotalPhotos');
+    const statExifCount = document.getElementById('statExifCount');
+    const statCameraCount = document.getElementById('statCameraCount');
+    const statCameraLabel = document.getElementById('statCameraLabel');
+    const statTimeSpan = document.getElementById('statTimeSpan');
+
+    /* Pattern Inputs */
+    const inputPrefix = document.getElementById('inputPrefix');
+    const inputStartIndex = document.getElementById('inputStartIndex');
+    const selectPadding = document.getElementById('selectPadding');
+    const selectSeparator = document.getElementById('selectSeparator');
+    const selectCase = document.getElementById('selectCase');
+
+    const btnSortAsc = document.getElementById('btnSortAsc');
+    const btnSortDesc = document.getElementById('btnSortDesc');
+    const btnSortManual = document.getElementById('btnSortManual');
+    const manualOrderHint = document.getElementById('manualOrderHint');
+    const btnInitialSortExif = document.getElementById('btnInitialSortExif');
+    const btnInitialSortManual = document.getElementById('btnInitialSortManual');
+    const btnCopyTerminal = document.getElementById('btnCopyTerminal');
+    const copyBtnText = document.getElementById('copyBtnText');
+
+    const btnScriptModeRename = document.getElementById('btnScriptModeRename');
+    const btnScriptModeUndo = document.getElementById('btnScriptModeUndo');
+
+    const viewListBtn = document.getElementById('viewListBtn');
+    const viewGridBtn = document.getElementById('viewGridBtn');
+    const btnHelp = document.getElementById('btnHelp');
+    const helpModal = document.getElementById('helpModal');
+    const btnCloseHelp = document.getElementById('btnCloseHelp');
+    const btnCloseHelpBtn = document.getElementById('btnCloseHelpBtn');
+
+    /* Toast notification */
+    function showToast(message, icon = '✅') {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toastMsg');
+      const toastIcon = document.getElementById('toastIcon');
+      toastMsg.innerText = message;
+      toastIcon.innerText = icon;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      toast.classList.add('translate-y-0', 'opacity-100');
+      setTimeout(() => {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3200);
+    }
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+    }
+
+    function parseAnyDate(dateInput) {
+      if (!dateInput) return null;
+      if (dateInput instanceof Date && !isNaN(dateInput.getTime())) {
+        return dateInput;
+      }
+      if (typeof dateInput === 'string') {
+        const trimmed = dateInput.trim();
+        const exifMatch = trimmed.match(/^(\d{4}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+        if (exifMatch) {
+          const [ , Y, M, D, h, m, s ] = exifMatch;
+          const parsed = new Date(`${Y}-${M}-${D}T${h}:${m}:${s}`);
+          if (!isNaN(parsed.getTime())) return parsed;
+        }
+
+        const directParsed = new Date(trimmed);
+        if (!isNaN(directParsed.getTime())) return directParsed;
+      }
+      return null;
+    }
+
+    async function scanXmpAndExifBinary(file) {
+      try {
+        const slice = file.slice(0, Math.min(file.size, 524288));
+        const arrayBuffer = await slice.arrayBuffer();
+        const decoder = new TextDecoder('utf-8', { fatal: false });
+        const textChunk = decoder.decode(arrayBuffer);
+
+        const patterns = [
+          /<(?:exif:)?DateTimeOriginal>([^<]+)<\/(?:exif:)?DateTimeOriginal>/i,
+          /<(?:xmp:)?CreateDate>([^<]+)<\/(?:xmp:)?CreateDate>/i,
+          /<(?:photoshop:)?DateCreated>([^<]+)<\/(?:photoshop:)?DateCreated>/i,
+          /<(?:exif:)?DateTimeDigitized>([^<]+)<\/(?:exif:)?DateTimeDigitized>/i,
+          /<(?:tiff:)?DateTime>([^<]+)<\/(?:tiff:)?DateTime>/i,
+          /DateTimeOriginal="([^"]+)"/i,
+          /CreateDate="([^"]+)"/i,
+          /DateCreated="([^"]+)"/i
+        ];
+
+        for (const regex of patterns) {
+          const match = textChunk.match(regex);
+          if (match && match[1]) {
+            const parsed = parseAnyDate(match[1]);
+            if (parsed) {
+              return { date: parsed, source: 'XMP: ' + match[0].split('>')[0].replace('<', '') };
+            }
+          }
+        }
+
+        const asciiDateMatch = textChunk.match(/(20\d{2}|19\d{2}):(0[1-9]|1[0-2]):(0[1-9]|[12]\d|3[01])\s+(0\d|1\d|2[0-3]):([0-5]\d):([0-5]\d)/);
+        if (asciiDateMatch) {
+          const parsed = parseAnyDate(asciiDateMatch[0]);
+          if (parsed) {
+            return { date: parsed, source: 'Raw EXIF Byte Sequence' };
+          }
+        }
+      } catch (err) {
+        console.warn('Binary scan warning:', err);
+      }
+      return null;
+    }
+
+    function formatDisplayDate(dateObj, subSecMs = 0) {
+      if (!dateObj) return { full: 'Non disponibile', date: 'N/D', time: 'N/D' };
+      const YYYY = dateObj.getFullYear();
+      const MM = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const DD = String(dateObj.getDate()).padStart(2, '0');
+      const hh = String(dateObj.getHours()).padStart(2, '0');
+      const mm = String(dateObj.getMinutes()).padStart(2, '0');
+      const ss = String(dateObj.getSeconds()).padStart(2, '0');
+      const ms = String(Math.round(subSecMs)).padStart(3, '0');
+      
+      return {
+        full: `${DD}/${MM}/${YYYY} ${hh}:${mm}:${ss}.${ms}`,
+        date: `${DD}/${MM}/${YYYY}`,
+        time: `${hh}:${mm}:${ss}`
+      };
+    }
+
+    /* Process Files with Multi-format and Sub-second precision support */
+    async function processFiles(fileList) {
+      const validExtensions = ['.jpg', '.jpeg', '.dng', '.tif', '.tiff', '.heic', '.heif'];
+      const files = Array.from(fileList).filter(f => {
+        const nameLower = f.name.toLowerCase();
+        return validExtensions.some(ext => nameLower.endsWith(ext)) || f.type.startsWith('image/');
+      });
+
+      if (files.length === 0) {
+        showToast('Nessun file fotografico valido selezionato', '⚠️');
+        return;
+      }
+
+      const newFiles = files.filter(f => !photos.some(p => p.file.name === f.name && p.file.size === f.size));
+      if (newFiles.length === 0) {
+        showToast('Tutti i file selezionati sono già presenti nel set!', 'ℹ️');
+        return;
+      }
+
+      const isInitial = photos.length === 0;
+
+      processingIndicator.classList.remove('hidden');
+      if (isInitial) {
+        dropZone.classList.add('hidden');
+      }
+
+      btnClearAll.classList.remove('hidden');
+      btnClearAll.classList.add('flex');
+      btnAddMoreHeader.classList.remove('hidden');
+      btnAddMoreHeader.classList.add('flex');
+
+      let processedCount = 0;
+      const total = newFiles.length;
+
+      for (const file of newFiles) {
+        const photoItem = await extractPhotoData(file);
+        photos.push(photoItem);
+        processedCount++;
+
+        const pct = Math.round((processedCount / total) * 100);
+        progressBar.style.width = `${pct}%`;
+        progressPercentage.innerText = `${pct}%`;
+        progressText.innerText = `Analisi Metadati: ${processedCount} di ${total} nuove fotografie...`;
+      }
+
+      processingIndicator.classList.add('hidden');
+      workspace.classList.remove('hidden');
+      workspace.classList.add('flex');
+
+      if (sortDirection !== 'MANUAL') {
+        sortPhotos();
+      }
+      updateTableAndNames();
+
+      if (isInitial) {
+        showToast(`${photos.length} fotografie caricate e pronte!`, '🎉');
+      } else {
+        showToast(`+${newFiles.length} nuove foto aggiunte! (Totale: ${photos.length})`, '✨');
+      }
+    }
+
+    async function extractPhotoData(file) {
+      let previewUrl = '';
+      try {
+        previewUrl = URL.createObjectURL(file);
+      } catch(e) {}
+
+      let parsedDate = null;
+      let dateSource = 'EXIF DateTimeOriginal';
+      let rawMetadata = {};
+      let cameraModel = 'Fotocamera Principale';
+      let subSecMs = 0;
+
+      if (window.exifr) {
+        try {
+          rawMetadata = await window.exifr.parse(file, {
+            tiff: true,
+            xmp: true,
+            icc: false,
+            iptc: true,
+            jfif: true,
+            mergeOutput: true
+          }) || {};
+
+          const candidateDates = [
+            rawMetadata.DateTimeOriginal,
+            rawMetadata.CreateDate,
+            rawMetadata.DateTimeDigitized,
+            rawMetadata.DateCreated,
+            rawMetadata.TimeCreated,
+            rawMetadata.DateTime,
+            rawMetadata.ModifyDate
+          ];
+
+          for (const cand of candidateDates) {
+            const d = parseAnyDate(cand);
+            if (d) {
+              parsedDate = d;
+              dateSource = 'EXIF/XMP: ' + (cand instanceof Date ? cand.toISOString() : cand);
+              break;
+            }
+          }
+
+          // Sub-second precision detection for burst shots
+          const subSec = rawMetadata.SubSecTimeOriginal || rawMetadata.SubSecTime || rawMetadata.SubSecTimeDigitized;
+          if (subSec) {
+            const cleanSub = String(subSec).replace(/\D/g, '');
+            if (cleanSub) {
+              subSecMs = parseFloat(('0.' + cleanSub)) * 1000;
+            }
+          }
+
+          if (rawMetadata.Model || rawMetadata.Make) {
+            cameraModel = `${rawMetadata.Make || ''} ${rawMetadata.Model || ''}`.trim() || 'Fotocamera';
+          }
+        } catch (e) {
+          console.warn('Exifr parse warning for ' + file.name, e);
+        }
+      }
+
+      if (!parsedDate) {
+        const binaryResult = await scanXmpAndExifBinary(file);
+        if (binaryResult) {
+          parsedDate = binaryResult.date;
+          dateSource = binaryResult.source;
+        }
+      }
+
+      const isFallback = !parsedDate;
+      if (!parsedDate) {
+        parsedDate = new Date(file.lastModified);
+        dateSource = 'Data File OS (Nessun tag EXIF/XMP)';
+      }
+
+      return {
+        id: Math.random().toString(36).substring(2, 9),
+        file: file,
+        originalName: file.name,
+        previewUrl: previewUrl,
+        captureDate: parsedDate,
+        subSecMs: subSecMs,
+        dateSource: dateSource,
+        rawMetadata: rawMetadata,
+        formattedDate: formatDisplayDate(parsedDate, subSecMs),
+        hasExifDate: !isFallback,
+        camera: cameraModel,
+        size: file.size,
+        newName: '',
+        isDuplicate: false
+      };
+    }
+
+    /* Sort photos chronologically when not in manual mode */
+    function sortPhotos() {
+      if (sortDirection === 'MANUAL') return;
+      photos.sort((a, b) => {
+        const timeA = (a.captureDate ? a.captureDate.getTime() : 0) + a.subSecMs;
+        const timeB = (b.captureDate ? b.captureDate.getTime() : 0) + b.subSecMs;
+        return sortDirection === 'ASC' ? timeA - timeB : timeB - timeA;
+      });
+    }
+
+    /* Calculate New Names and Check for Duplicate Collisions */
+    function calculateNewNames() {
+      const prefix = inputPrefix.value.trim();
+      const startIndex = parseInt(inputStartIndex.value, 10) || 1;
+      const padding = parseInt(selectPadding.value, 10) || 3;
+      const separator = selectSeparator.value;
+      const caseChoice = selectCase.value;
+
+      const nameOccurrences = {};
+
+      photos.forEach((photo, index) => {
+        const currentIndex = startIndex + index;
+        const indexPadded = String(currentIndex).padStart(padding, '0');
+        
+        const parts = [];
+        if (prefix) parts.push(prefix);
+        parts.push(indexPadded);
+
+        let finalExtension = 'jpg';
+        const originalExt = photo.originalName.includes('.') ? photo.originalName.split('.').pop() : 'jpg';
+        
+        if (caseChoice === 'keep') {
+          finalExtension = originalExt;
+        } else if (caseChoice === 'JPG') {
+          finalExtension = originalExt.toUpperCase();
+        } else {
+          finalExtension = originalExt.toLowerCase();
+        }
+
+        const baseName = parts.join(separator);
+        const fullNewName = `${baseName}.${finalExtension}`;
+        photo.newName = fullNewName;
+
+        nameOccurrences[fullNewName] = (nameOccurrences[fullNewName] || 0) + 1;
+      });
+
+      let hasDuplicates = false;
+      photos.forEach(photo => {
+        photo.isDuplicate = nameOccurrences[photo.newName] > 1;
+        if (photo.isDuplicate) hasDuplicates = true;
+      });
+
+      if (hasDuplicates) {
+        collisionAlertBanner.classList.remove('hidden');
+      } else {
+        collisionAlertBanner.classList.add('hidden');
+      }
+
+      if (photos.length > 0) {
+        patternLiveSample.innerText = photos[0].newName;
+      }
+    }
+
+    function updateStats() {
+      statTotalPhotos.innerText = photos.length;
+      const exifFound = photos.filter(p => p.hasExifDate).length;
+      statExifCount.innerText = `${exifFound} / ${photos.length}`;
+
+      const cameras = [...new Set(photos.map(p => p.camera))];
+      statCameraCount.innerText = cameras.length;
+      statCameraLabel.innerText = cameras.length === 1 ? 'camera rilevata' : 'corpi macchina';
+      
+      if (photos.length >= 2) {
+        const first = photos[0].captureDate;
+        const last = photos[photos.length - 1].captureDate;
+        if (first && last) {
+          const diffMs = Math.abs(last - first);
+          const hours = Math.floor(diffMs / (1000 * 60 * 60));
+          const mins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+          statTimeSpan.innerText = `${hours}h ${mins}m di scatti`;
+        }
+      } else if (photos.length === 1) {
+        statTimeSpan.innerText = photos[0].formattedDate.time;
+      } else {
+        statTimeSpan.innerText = '--:--';
+      }
+    }
+
+    function openMetadataInspector(photoId) {
+      const photo = photos.find(p => p.id === photoId);
+      if (!photo) return;
+
+      document.getElementById('inspectFilename').innerText = photo.originalName;
+      document.getElementById('inspectParsedDate').innerText = photo.formattedDate.full;
+      document.getElementById('inspectCameraModel').innerText = photo.camera || 'Non specificata';
+      document.getElementById('inspectDateSource').innerText = photo.dateSource;
+      
+      const jsonClean = JSON.stringify(photo.rawMetadata || {}, null, 2);
+      document.getElementById('inspectRawJson').innerText = jsonClean !== '{}' 
+        ? jsonClean 
+        : 'Nessun blocco EXIF/XMP standard esposto. Data recuperata da: ' + photo.dateSource;
+      
+      document.getElementById('metadataInspectorModal').classList.remove('hidden');
+    }
+
+    /* Drag and drop reordering state */
+    let dragSrcIndex = null;
+
+    function clearRowDropIndicators() {
+      document.querySelectorAll('#photoTableBody tr').forEach(r => {
+        r.classList.remove('border-t-2', 'border-t-brand-600', 'border-b-2', 'border-b-brand-600');
+      });
+    }
+
+    function updateTableAndNames() {
+      calculateNewNames();
+      updateStats();
+      photoCountBadge.innerText = photos.length;
+
+      // Render Table
+      photoTableBody.innerHTML = '';
+      photos.forEach((photo, idx) => {
+        const tr = document.createElement('tr');
+        const rowBg = photo.isDuplicate ? 'bg-rose-50/70 border-rose-200' : 'hover:bg-slate-50/80 border-slate-100';
+        tr.className = `${rowBg} transition-colors border-b group`;
+        tr.setAttribute('draggable', 'true');
+        tr.dataset.index = idx;
+
+        const dateTag = photo.hasExifDate
+          ? `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-indigo-50 text-brand-700 border border-indigo-100">
+               <svg class="w-3 h-3 text-brand-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+               ${photo.formattedDate.full}
+             </span>`
+          : `<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-mono font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+               ⚠️ ${photo.formattedDate.full}
+             </span>`;
+
+        const newNameDisplay = photo.isDuplicate
+          ? `<span class="bg-rose-100 text-rose-800 px-2 py-0.5 rounded-md border border-rose-300 font-bold truncate max-w-[220px]" title="Nome duplicato!">⚠️ ${photo.newName}</span>`
+          : `<span class="bg-emerald-50/80 px-2 py-0.5 rounded-md border border-emerald-200/60 truncate max-w-[220px]" title="${photo.newName}">${photo.newName}</span>`;
+
+        tr.innerHTML = `
+          <td class="py-3 px-3 text-center">
+            <div class="flex items-center justify-center gap-1.5 select-none">
+              <span class="row-drag-handle cursor-grab active:cursor-grabbing text-slate-400 hover:text-brand-600 p-1 rounded hover:bg-slate-100 transition-colors" title="Trascina per riordinare">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 8h16M4 16h16"/>
+                </svg>
+              </span>
+              <span class="font-mono text-[11px] font-bold text-slate-500 w-5 text-center">
+                ${String(idx + 1).padStart(2, '0')}
+              </span>
+              <div class="flex flex-col -space-y-0.5 opacity-40 group-hover:opacity-100 transition-opacity">
+                <button type="button" class="btn-move-up text-slate-400 hover:text-brand-600 disabled:opacity-20 disabled:pointer-events-none p-0.5 cursor-pointer" ${idx === 0 ? 'disabled' : ''} title="Sposta su" data-index="${idx}">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 15l7-7 7 7"/></svg>
+                </button>
+                <button type="button" class="btn-move-down text-slate-400 hover:text-brand-600 disabled:opacity-20 disabled:pointer-events-none p-0.5 cursor-pointer" ${idx === photos.length - 1 ? 'disabled' : ''} title="Sposta giù" data-index="${idx}">
+                  <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+              </div>
+            </div>
+          </td>
+          <td class="py-3 px-3">
+            <div class="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden relative group/img cursor-pointer shadow-2xs hover:scale-105 transition-transform" onclick="openMetadataInspector('${photo.id}')" title="Ispeziona metadati">
+              ${photo.previewUrl ? `<img src="${photo.previewUrl}" draggable="false" alt="${photo.originalName}" class="w-full h-full object-cover select-none pointer-events-none">` : `<div class="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-400">RAW</div>`}
+            </div>
+          </td>
+          <td class="py-3 px-4">
+            <div class="text-slate-500 font-mono text-xs truncate max-w-[200px]" title="${photo.originalName}">
+              ${photo.originalName}
+            </div>
+          </td>
+          <td class="py-3 px-4 cursor-pointer" onclick="openMetadataInspector('${photo.id}')">
+            ${dateTag}
+          </td>
+          <td class="py-3 px-4">
+            <div class="text-emerald-700 font-mono font-bold text-xs flex items-center gap-2">
+              <svg class="w-3.5 h-3.5 text-emerald-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+              ${newNameDisplay}
+            </div>
+          </td>
+          <td class="py-3 px-4">
+            <span class="text-slate-700 text-xs font-semibold truncate block max-w-[170px]" title="${photo.camera}">
+              ${photo.camera}
+            </span>
+          </td>
+          <td class="py-3 px-4 text-right font-mono text-[11px] text-slate-400">
+            ${formatBytes(photo.size)}
+          </td>
+        `;
+
+        // Row Drag & Drop event handlers
+        tr.addEventListener('dragstart', (e) => {
+          if (e.target.closest('button') || e.target.closest('.group\\/img')) {
+            e.preventDefault();
+            return;
+          }
+          dragSrcIndex = idx;
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', String(idx));
+          setTimeout(() => tr.classList.add('opacity-40', 'bg-indigo-50/80'), 0);
+        });
+
+        tr.addEventListener('dragend', () => {
+          tr.classList.remove('opacity-40', 'bg-indigo-50/80');
+          dragSrcIndex = null;
+          clearRowDropIndicators();
+        });
+
+        tr.addEventListener('dragover', (e) => {
+          if (dragSrcIndex === null) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          clearRowDropIndicators();
+
+          const rect = tr.getBoundingClientRect();
+          const isUpperHalf = (e.clientY - rect.top) < (rect.height / 2);
+          if (isUpperHalf) {
+            tr.classList.add('border-t-2', 'border-t-brand-600');
+          } else {
+            tr.classList.add('border-b-2', 'border-b-brand-600');
+          }
+        });
+
+        tr.addEventListener('dragleave', () => {
+          tr.classList.remove('border-t-2', 'border-t-brand-600', 'border-b-2', 'border-b-brand-600');
+        });
+
+        tr.addEventListener('drop', (e) => {
+          // Allow external files to be dropped directly on the table
+          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            e.preventDefault();
+            processFiles(e.dataTransfer.files);
+            return;
+          }
+
+          if (dragSrcIndex === null) return;
+          e.preventDefault();
+          clearRowDropIndicators();
+
+          const targetIndex = idx;
+          if (dragSrcIndex === targetIndex) return;
+
+          const rect = tr.getBoundingClientRect();
+          const isUpperHalf = (e.clientY - rect.top) < (rect.height / 2);
+          let insertIndex = isUpperHalf ? targetIndex : targetIndex + 1;
+          if (dragSrcIndex < insertIndex) {
+            insertIndex--;
+          }
+
+          // ponytail: Native HTML5 drag-and-drop on table rows and array splicing is optimal for typical photo batches (< 2000 items); avoid heavy virtualized drag libraries.
+          const [movedPhoto] = photos.splice(dragSrcIndex, 1);
+          photos.splice(insertIndex, 0, movedPhoto);
+
+          setSortMode('MANUAL');
+          updateTableAndNames();
+          showToast(`Foto spostata alla posizione #${insertIndex + 1}`, '⇅');
+        });
+
+        // Quick Move Up & Down button listeners
+        const btnUp = tr.querySelector('.btn-move-up');
+        const btnDown = tr.querySelector('.btn-move-down');
+        if (btnUp) {
+          btnUp.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (idx > 0) {
+              const temp = photos[idx];
+              photos[idx] = photos[idx - 1];
+              photos[idx - 1] = temp;
+              setSortMode('MANUAL');
+              updateTableAndNames();
+            }
+          });
+        }
+        if (btnDown) {
+          btnDown.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (idx < photos.length - 1) {
+              const temp = photos[idx];
+              photos[idx] = photos[idx + 1];
+              photos[idx + 1] = temp;
+              setSortMode('MANUAL');
+              updateTableAndNames();
+            }
+          });
+        }
+
+        photoTableBody.appendChild(tr);
+      });
+
+      // Render Grid
+      gridViewContainer.innerHTML = '';
+      photos.forEach((photo, idx) => {
+        const card = document.createElement('div');
+        const cardBorder = photo.isDuplicate ? 'border-rose-400 bg-rose-50/50' : 'border-slate-200 hover:border-brand-500 bg-white';
+        card.className = `${cardBorder} border rounded-2xl overflow-hidden p-2.5 flex flex-col gap-2 relative cursor-pointer shadow-subtle hover:shadow-card transition-all group`;
+        card.setAttribute('draggable', 'true');
+
+        card.innerHTML = `
+          <div class="aspect-square bg-slate-100 rounded-xl overflow-hidden relative">
+            ${photo.previewUrl ? `<img src="${photo.previewUrl}" draggable="false" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 pointer-events-none select-none" alt="${photo.newName}">` : `<div class="w-full h-full flex items-center justify-center font-bold text-slate-400 font-mono">FILE</div>`}
+            <span class="absolute top-2 left-2 bg-slate-900/80 backdrop-blur-md px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold text-white">#${idx + 1}</span>
+          </div>
+          <div class="flex flex-col gap-0.5 px-1">
+            <span class="text-[11px] font-mono font-bold truncate ${photo.isDuplicate ? 'text-rose-700' : 'text-emerald-700'}" title="${photo.newName}">${photo.newName}</span>
+            <span class="text-[10px] text-slate-400 font-mono truncate">${photo.formattedDate.full}</span>
+          </div>
+        `;
+
+        card.addEventListener('click', (e) => {
+          openMetadataInspector(photo.id);
+        });
+
+        // Grid Card Drag & Drop reorder
+        card.addEventListener('dragstart', (e) => {
+          dragSrcIndex = idx;
+          e.dataTransfer.effectAllowed = 'move';
+          e.dataTransfer.setData('text/plain', String(idx));
+          setTimeout(() => card.classList.add('opacity-40', 'scale-95'), 0);
+        });
+
+        card.addEventListener('dragend', () => {
+          card.classList.remove('opacity-40', 'scale-95');
+          dragSrcIndex = null;
+          document.querySelectorAll('#gridViewContainer > div').forEach(c => c.classList.remove('ring-2', 'ring-brand-500'));
+        });
+
+        card.addEventListener('dragover', (e) => {
+          if (dragSrcIndex === null) return;
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'move';
+          card.classList.add('ring-2', 'ring-brand-500');
+        });
+
+        card.addEventListener('dragleave', () => {
+          card.classList.remove('ring-2', 'ring-brand-500');
+        });
+
+        card.addEventListener('drop', (e) => {
+          card.classList.remove('ring-2', 'ring-brand-500');
+          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+            e.preventDefault();
+            processFiles(e.dataTransfer.files);
+            return;
+          }
+          if (dragSrcIndex === null || dragSrcIndex === idx) return;
+          e.preventDefault();
+          const [movedPhoto] = photos.splice(dragSrcIndex, 1);
+          photos.splice(idx, 0, movedPhoto);
+          setSortMode('MANUAL');
+          updateTableAndNames();
+          showToast(`Foto riordinata alla posizione #${idx + 1}`, '⇅');
+        });
+
+        gridViewContainer.appendChild(card);
+      });
+
+      generateBashScript();
+    }
+
+    /* Generate Bash Commands for Rename or Rollback Undo */
+    function generateBashScript() {
+      if (photos.length === 0) {
+        bashPreviewCode.innerText = 'mv -n "foto_1.jpg" "Servizio-001.jpg"';
+        commandLineCount.innerText = '0 righe';
+        return;
+      }
+
+      const lines = [];
+
+      if (scriptMode === 'rename') {
+        photos.forEach((p) => {
+          const orig = p.originalName.replace(/"/g, '\\"');
+          const target = p.newName.replace(/"/g, '\\"');
+          lines.push(`mv -n "${orig}" "${target}"`);
+        });
+        commandLineCount.innerText = `${lines.length} comandi (Rinomina)`;
+      } else if (scriptMode === 'undo') {
+        photos.forEach((p) => {
+          const orig = p.originalName.replace(/"/g, '\\"');
+          const target = p.newName.replace(/"/g, '\\"');
+          lines.push(`mv -n "${target}" "${orig}"`);
+        });
+        commandLineCount.innerText = `${lines.length} comandi (Rollback Undo)`;
+      }
+
+      bashPreviewCode.innerText = lines.join('\n');
+    }
+
+    /* Copy Terminal Commands */
+    btnCopyTerminal.addEventListener('click', () => {
+      const code = bashPreviewCode.innerText;
+      if (!code || photos.length === 0) return;
+
+      const tempInput = document.createElement('textarea');
+      tempInput.value = code;
+      document.body.appendChild(tempInput);
+      tempInput.select();
+      try {
+        document.execCommand('copy');
+        copyBtnText.innerText = '✓ Comandi Copiati!';
+        const label = scriptMode === 'rename' ? 'Rinomina' : 'Rollback';
+        showToast(`Comandi (${label}) pronti da incollare nel Terminale!`, '📋');
+        setTimeout(() => {
+          copyBtnText.innerText = 'Copia Solo Comandi';
+        }, 2200);
+      } catch (e) {
+        showToast('Impossibile copiare automaticamente', '⚠️');
+      }
+      document.body.removeChild(tempInput);
+    });
+
+    /* Toggle Script Mode: Rename vs Undo Rollback */
+    btnScriptModeRename.addEventListener('click', () => {
+      scriptMode = 'rename';
+      btnScriptModeRename.className = 'px-3 py-1 rounded-md bg-brand-600 text-white font-bold transition cursor-pointer';
+      btnScriptModeUndo.className = 'px-3 py-1 rounded-md text-slate-400 hover:text-white font-bold transition cursor-pointer';
+      generateBashScript();
+    });
+
+    btnScriptModeUndo.addEventListener('click', () => {
+      scriptMode = 'undo';
+      btnScriptModeUndo.className = 'px-3 py-1 rounded-md bg-amber-600 text-white font-bold transition cursor-pointer';
+      btnScriptModeRename.className = 'px-3 py-1 rounded-md text-slate-400 hover:text-white font-bold transition cursor-pointer';
+      generateBashScript();
+    });
+
+    /* Drag & Drop configuration helper */
+    function setupDragAndDrop(element, inputElement) {
+      ['dragenter', 'dragover'].forEach(eventName => {
+        element.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          element.classList.add('drag-active');
+        }, false);
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        element.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          element.classList.remove('drag-active');
+        }, false);
+      });
+
+      element.addEventListener('drop', (e) => {
+        const dt = e.dataTransfer;
+        if (dt && dt.files && dt.files.length > 0) {
+          processFiles(dt.files);
+        }
+      });
+
+      if (inputElement) {
+        inputElement.addEventListener('change', (e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            processFiles(e.target.files);
+            inputElement.value = '';
+          }
+        });
+      }
+    }
+
+    setupDragAndDrop(dropZone, fileInput);
+    setupDragAndDrop(compactAddDropZone, addMoreFileInput);
+
+    /* Header "+ Aggiungi Foto" button click */
+    btnAddMoreHeader.addEventListener('click', () => {
+      addMoreFileInput.click();
+    });
+
+    [inputPrefix, inputStartIndex, selectPadding, selectSeparator, selectCase].forEach(el => {
+      el.addEventListener('input', updateTableAndNames);
+      el.addEventListener('change', updateTableAndNames);
+    });
+
+    /* Set sorting mode: ASC, DESC, or MANUAL (preserves drop order and user manual reordering) */
+    function setSortMode(mode, triggerSort = false) {
+      sortDirection = mode;
+
+      [btnSortAsc, btnSortDesc, btnSortManual].forEach(btn => {
+        if (!btn) return;
+        btn.classList.remove('segment-active');
+        btn.classList.add('text-slate-600');
+      });
+
+      if (mode === 'ASC') {
+        if (btnSortAsc) {
+          btnSortAsc.classList.add('segment-active');
+          btnSortAsc.classList.remove('text-slate-600');
+        }
+        if (manualOrderHint) {
+          manualOrderHint.classList.add('hidden');
+          manualOrderHint.classList.remove('inline-flex');
+        }
+      } else if (mode === 'DESC') {
+        if (btnSortDesc) {
+          btnSortDesc.classList.add('segment-active');
+          btnSortDesc.classList.remove('text-slate-600');
+        }
+        if (manualOrderHint) {
+          manualOrderHint.classList.add('hidden');
+          manualOrderHint.classList.remove('inline-flex');
+        }
+      } else if (mode === 'MANUAL') {
+        if (btnSortManual) {
+          btnSortManual.classList.add('segment-active');
+          btnSortManual.classList.remove('text-slate-600');
+        }
+        if (manualOrderHint) {
+          manualOrderHint.classList.remove('hidden');
+          manualOrderHint.classList.add('inline-flex');
+        }
+      }
+
+      // Synchronize initial dropzone preference buttons
+      if (btnInitialSortExif && btnInitialSortManual) {
+        if (mode === 'MANUAL') {
+          btnInitialSortManual.classList.add('segment-active');
+          btnInitialSortManual.classList.remove('text-slate-600');
+          btnInitialSortExif.classList.remove('segment-active');
+          btnInitialSortExif.classList.add('text-slate-600');
+        } else {
+          btnInitialSortExif.classList.add('segment-active');
+          btnInitialSortExif.classList.remove('text-slate-600');
+          btnInitialSortManual.classList.remove('segment-active');
+          btnInitialSortManual.classList.add('text-slate-600');
+        }
+      }
+
+      if (triggerSort && mode !== 'MANUAL') {
+        sortPhotos();
+      }
+    }
+
+    btnSortAsc.addEventListener('click', () => {
+      setSortMode('ASC', true);
+      updateTableAndNames();
+      showToast('Ordinamento cronologico EXIF (dal primo scatto)', '⏱️');
+    });
+
+    btnSortDesc.addEventListener('click', () => {
+      setSortMode('DESC', true);
+      updateTableAndNames();
+      showToast('Ordinamento cronologico EXIF (inverso)', '⏱️');
+    });
+
+    btnSortManual.addEventListener('click', () => {
+      setSortMode('MANUAL', false);
+      updateTableAndNames();
+      showToast('Modalità manuale attiva: trascina le righe per riordinare', '✋');
+    });
+
+    if (btnInitialSortExif) {
+      btnInitialSortExif.addEventListener('click', () => {
+        setSortMode('ASC', false);
+        showToast('Modalità iniziale: Cronologico EXIF', '⏱️');
+      });
+    }
+
+    if (btnInitialSortManual) {
+      btnInitialSortManual.addEventListener('click', () => {
+        setSortMode('MANUAL', false);
+        showToast('Modalità iniziale: Ordine di Trascinamento (FIFO)', '⇅');
+      });
+    }
+
+    viewListBtn.addEventListener('click', () => {
+      viewListBtn.classList.add('segment-active');
+      viewListBtn.classList.remove('text-slate-600');
+      viewGridBtn.classList.remove('segment-active');
+      viewGridBtn.classList.add('text-slate-600');
+      tableViewContainer.classList.remove('hidden');
+      gridViewContainer.classList.add('hidden');
+    });
+
+    viewGridBtn.addEventListener('click', () => {
+      viewGridBtn.classList.add('segment-active');
+      viewGridBtn.classList.remove('text-slate-600');
+      viewListBtn.classList.remove('segment-active');
+      viewListBtn.classList.add('text-slate-600');
+      tableViewContainer.classList.add('hidden');
+      gridViewContainer.classList.remove('hidden');
+    });
+
+    btnClearAll.addEventListener('click', () => {
+      photos.forEach(p => {
+        if (p.previewUrl) URL.revokeObjectURL(p.previewUrl);
+      });
+      photos = [];
+      setSortMode('ASC');
+      workspace.classList.add('hidden');
+      workspace.classList.remove('flex');
+      dropZone.classList.remove('hidden');
+      btnClearAll.classList.add('hidden');
+      btnAddMoreHeader.classList.add('hidden');
+      collisionAlertBanner.classList.add('hidden');
+      fileInput.value = '';
+      addMoreFileInput.value = '';
+      showToast('Workspace resettato', '🧹');
+    });
+
+    document.getElementById('btnCloseInspector').addEventListener('click', () => {
+      document.getElementById('metadataInspectorModal').classList.add('hidden');
+    });
+    document.getElementById('btnCloseInspectorBtn').addEventListener('click', () => {
+      document.getElementById('metadataInspectorModal').classList.add('hidden');
+    });
+    document.getElementById('metadataInspectorModal').addEventListener('click', (e) => {
+      if (e.target === document.getElementById('metadataInspectorModal')) {
+        document.getElementById('metadataInspectorModal').classList.add('hidden');
+      }
+    });
+
+    btnHelp.addEventListener('click', () => helpModal.classList.remove('hidden'));
+    btnCloseHelp.addEventListener('click', () => helpModal.classList.add('hidden'));
+    btnCloseHelpBtn.addEventListener('click', () => helpModal.classList.add('hidden'));
+    helpModal.addEventListener('click', (e) => {
+      if (e.target === helpModal) helpModal.classList.add('hidden');
+    });
+
+    /* Prevent default browser file-opening navigation on window drag & drop */
+    window.addEventListener('dragover', (e) => e.preventDefault());
+    window.addEventListener('drop', (e) => e.preventDefault());
+
+  </script>
+</body>
+</html>
