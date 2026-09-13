@@ -4,7 +4,7 @@ A client-side photo sorting and batch renaming studio designed for macOS photogr
 
 ## Architecture & Technology Stack
 
-- **Zero-Build Single File**: `ChronoRename.html` contains the entire application (HTML, CSS via Tailwind CDN, and vanilla ES6+ JavaScript).
+- **Zero-Build Single File**: `index.html` contains the entire application (HTML, CSS via Tailwind CDN, and vanilla ES6+ JavaScript).
 - **Client-Side Privacy**: Runs completely offline in the browser. Photos never leave the user's computer.
 - **EXIF / XMP Engine**: Powered by `exifr` (Full UMD bundle) with binary fallbacks for XMP packet extraction and SubSecTimeOriginal sub-second burst parsing.
 - **Native HTML5 Drag & Drop**: Native row and grid drag reordering without bloated external UI libraries.
