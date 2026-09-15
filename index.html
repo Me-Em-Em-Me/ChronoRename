@@ -83,6 +83,7 @@
 
     /* Grid View layout and sizing driven by --grid-card-size CSS variable */
     #gridViewContainer {
+      position: relative !important;
       grid-template-columns: repeat(auto-fill, minmax(var(--grid-card-size, 120px), 1fr)) !important;
       gap: 6px !important;
     }
@@ -177,19 +178,59 @@
       background-color: #ede9fe !important;
     }
 
-    /* Animated Drop placeholder showing destination slot */
-    .grid-drop-placeholder {
-      border: 2px dashed #6366f1 !important;
-      background: rgba(99, 102, 241, 0.08) !important;
-      border-radius: 8px !important;
-      aspect-ratio: 4 / 3 !important;
-      box-shadow: inset 0 0 14px rgba(99, 102, 241, 0.16);
-      animation: placeholder-pulse 1.2s ease-in-out infinite;
+    /* Precision insertion line between grid cards during drag & drop */
+    .grid-drop-indicator {
+      position: absolute;
+      width: 4px;
+      background: #4f46e5;
+      border-radius: 9999px;
+      box-shadow: 0 0 10px rgba(79, 70, 229, 0.8), 0 0 3px rgba(79, 70, 229, 0.5);
       pointer-events: none;
+      z-index: 50;
+      transform: translateX(-50%);
     }
-    @keyframes placeholder-pulse {
-      0%, 100% { border-color: #6366f1; background: rgba(99, 102, 241, 0.05); }
-      50% { border-color: #4338ca; background: rgba(99, 102, 241, 0.15); }
+    .grid-drop-indicator::before,
+    .grid-drop-indicator::after {
+      content: '';
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 8px;
+      height: 8px;
+      background: #4f46e5;
+      border-radius: 50%;
+      box-shadow: 0 0 6px rgba(79, 70, 229, 0.9);
+    }
+    .grid-drop-indicator::before {
+      top: -3px;
+    }
+    .grid-drop-indicator::after {
+      bottom: -3px;
+    }
+    .grid-fullscreen .grid-drop-indicator {
+      background: #0a84ff;
+      box-shadow: 0 0 10px rgba(10, 132, 255, 0.8), 0 0 3px rgba(10, 132, 255, 0.5);
+    }
+    .grid-fullscreen .grid-drop-indicator::before,
+    .grid-fullscreen .grid-drop-indicator::after {
+      background: #0a84ff;
+      box-shadow: 0 0 6px rgba(10, 132, 255, 0.9);
+    }
+
+    /* Disable all hover effects, card transitions and pointer events on card internals during drag */
+    body.is-dragging {
+      user-select: none !important;
+      -webkit-user-select: none !important;
+    }
+    body.is-dragging #gridViewContainer div[data-photo-id] {
+      transition: none !important;
+      transform: none !important;
+      box-shadow: none !important;
+    }
+    body.is-dragging #gridViewContainer div[data-photo-id] * {
+      pointer-events: none !important;
+      transition: none !important;
+      transform: none !important;
     }
   </style>
 </head>
@@ -661,6 +702,8 @@
 
         <!-- Grid View Container: lives inside the fullscreen window while it is open -->
         <div id="gridViewContainer" class="hidden grid">
+          <!-- Insertion indicator line rendered during drag & drop -->
+          <div id="gridDropIndicator" class="grid-drop-indicator" style="display: none;"></div>
           <!-- Rendered grid cards -->
         </div>
 
@@ -1139,11 +1182,68 @@
       }
     }
 
-    async function extractPhotoData(file) {
-      let previewUrl = '';
+    /* Generate lightweight thumbnail to prevent VRAM saturation and decoding lag */
+    async function createPhotoThumbnail(file) {
+      // 1. Instant extraction of embedded EXIF thumbnail (ideal for high-res RAW / DSLR / Mirrorless JPEGs)
+      if (window.exifr && typeof window.exifr.thumbnailUrl === 'function') {
+        try {
+          const thumb = await window.exifr.thumbnailUrl(file);
+          if (thumb) return thumb;
+        } catch (e) {}
+      }
+
+      // 2. Fast native downsampling via createImageBitmap and canvas (max 400px box)
       try {
-        previewUrl = URL.createObjectURL(file);
-      } catch(e) {}
+        if (typeof createImageBitmap === 'function') {
+          const maxDim = 400;
+          let bmp = null;
+          try {
+            bmp = await createImageBitmap(file, { resizeWidth: maxDim, resizeQuality: 'medium', imageOrientation: 'from-image' });
+          } catch (e) {
+            try {
+              bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+            } catch (e2) {
+              bmp = await createImageBitmap(file);
+            }
+          }
+          if (bmp) {
+            let w = bmp.width;
+            let h = bmp.height;
+            if (w > maxDim || h > maxDim) {
+              if (w > h) {
+                h = Math.round((h * maxDim) / w);
+                w = maxDim;
+              } else {
+                w = Math.round((w * maxDim) / h);
+                h = maxDim;
+              }
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = w;
+            canvas.height = h;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(bmp, 0, 0, w, h);
+            bmp.close();
+            // ponytail: JPEG compression at quality 0.82 balances crispness on Retina with 30KB memory footprint.
+            const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.82));
+            if (blob) {
+              return URL.createObjectURL(blob);
+            }
+          }
+        }
+      } catch (e) {}
+
+      // 3. Fallback to direct object URL
+      // ponytail: direct file URL fallback ensures unsupported RAW formats still render if the browser can handle them.
+      try {
+        return URL.createObjectURL(file);
+      } catch (e) {
+        return '';
+      }
+    }
+
+    async function extractPhotoData(file) {
+      const thumbPromise = createPhotoThumbnail(file);
 
       let parsedDate = null;
       let dateSource = 'EXIF DateTimeOriginal';
@@ -1211,6 +1311,8 @@
         parsedDate = new Date(file.lastModified);
         dateSource = 'Data File OS (Nessun tag EXIF/XMP)';
       }
+
+      const previewUrl = await thumbPromise;
 
       return {
         id: Math.random().toString(36).substring(2, 9),
@@ -1342,93 +1444,128 @@
     let dragSrcIndex = null;
     let draggedIdsJson = '';
     let lastDragPoint = null;
+    let targetDropPhotoId = undefined;
+    let hasValidDropTarget = false;
+    let gridDropIndicator = null;
+    let activeDropCard = null;
+    let activeDropIsBefore = null;
 
-    /* The drop placeholder is rebuilt on every grid render, so the drag handlers below live at
-     module scope and always work on the current element: re-rendering never stacks duplicate
-     listeners, which used to leave hidden placeholders behind. */
-    let gridPlaceholder = null;
+    /* Updates the visual insertion line between cards in real time without lag */
+    function updateDropIndicator(clientX, clientY, target) {
+      if (!gridViewContainer || dragSrcIndex === null) return;
 
-    // Resolves the drop slot from pointer coordinates instead of from the hovered element: the
-    // browser can move the pointer across several cards without emitting a dragover for any of
-    // them, which used to leave the placeholder behind. `ref` is the cell to land in
-    // (a node = before it, null = end of the sequence, undefined = keep the current preview).
-    function resolveDropSlot(clientX, clientY) {
-      const under = document.elementFromPoint(clientX, clientY);
-      if (!under || !gridViewContainer.contains(under)) return { inside: false, ref: undefined };
+      // 1. Instant O(1) resolution via direct card target
+      let cardUnder = target ? target.closest('#gridViewContainer > div[data-photo-id]') : null;
 
-      const cardUnder = under.closest('#gridViewContainer > div[data-photo-id]');
-      if (cardUnder) {
-        const rect = cardUnder.getBoundingClientRect();
-        return { inside: true, ref: clientX < rect.left + rect.width / 2 ? cardUnder : cardUnder.nextSibling };
+      // 2. Fallback when hovering directly over gaps or outer container space
+      if (!cardUnder) {
+        const lastId = photos[photos.length - 1]?.id;
+        const lastCard = lastId ? gridViewContainer.querySelector(`div[data-photo-id="${lastId}"]`) : null;
+        if (lastCard && clientY > lastCard.getBoundingClientRect().bottom) {
+          cardUnder = lastCard;
+        } else {
+          const under = document.elementFromPoint(clientX, clientY);
+          if (!under || !gridViewContainer.contains(under)) {
+            hideDropIndicator();
+            return;
+          }
+          cardUnder = under.closest('#gridViewContainer > div[data-photo-id]');
+          if (!cardUnder) {
+            const leftCheck = document.elementFromPoint(clientX - 6, clientY)?.closest('#gridViewContainer > div[data-photo-id]');
+            const rightCheck = document.elementFromPoint(clientX + 6, clientY)?.closest('#gridViewContainer > div[data-photo-id]');
+            cardUnder = leftCheck || rightCheck || null;
+          }
+        }
       }
 
-      const cardNodes = gridViewContainer.querySelectorAll('div[data-photo-id]');
-      const lastCard = cardNodes[cardNodes.length - 1];
-      // Past the last row the photo lands at the end of the sequence, like a file manager window
-      const pastLastRow = lastCard && clientY > lastCard.getBoundingClientRect().bottom;
-      return { inside: true, ref: pastLastRow ? null : undefined };
+      if (!cardUnder) {
+        hideDropIndicator();
+        return;
+      }
+
+      const cardRect = cardUnder.getBoundingClientRect();
+      const isPastLastRow = clientY > cardRect.bottom;
+      const isBefore = isPastLastRow ? false : (clientX < (cardRect.left + cardRect.width / 2));
+
+      // 3. Fast bail-out: if cursor is still targeting the exact same slot, do ZERO DOM work!
+      if (cardUnder === activeDropCard && isBefore === activeDropIsBefore) {
+        return;
+      }
+      activeDropCard = cardUnder;
+      activeDropIsBefore = isBefore;
+
+      let dragIds = [];
+      try {
+        dragIds = JSON.parse(draggedIdsJson) || [];
+      } catch (e) {}
+
+      if (isBefore) {
+        if (dragIds.includes(cardUnder.dataset.photoId)) {
+          let cur = cardUnder;
+          while (cur && (!cur.matches?.('div[data-photo-id]') || dragIds.includes(cur.dataset.photoId))) {
+            cur = cur.nextElementSibling;
+          }
+          targetDropPhotoId = cur ? cur.dataset.photoId : null;
+        } else {
+          targetDropPhotoId = cardUnder.dataset.photoId;
+        }
+      } else {
+        let cur = cardUnder.nextElementSibling;
+        while (cur && (!cur.matches?.('div[data-photo-id]') || dragIds.includes(cur.dataset.photoId))) {
+          cur = cur.nextElementSibling;
+        }
+        targetDropPhotoId = cur ? cur.dataset.photoId : null;
+      }
+
+      hasValidDropTarget = true;
+
+      // Position drop indicator using direct offset properties (relative to position:relative container)
+      const lineX = isBefore ? (cardUnder.offsetLeft - 3) : (cardUnder.offsetLeft + cardUnder.offsetWidth + 3);
+      const lineY = cardUnder.offsetTop;
+
+      if (!gridDropIndicator || !gridViewContainer.contains(gridDropIndicator)) {
+        gridDropIndicator = document.getElementById('gridDropIndicator') || document.createElement('div');
+        gridDropIndicator.id = 'gridDropIndicator';
+        gridDropIndicator.className = 'grid-drop-indicator';
+        gridViewContainer.appendChild(gridDropIndicator);
+      }
+
+      gridDropIndicator.style.left = `${lineX}px`;
+      gridDropIndicator.style.top = `${lineY}px`;
+      gridDropIndicator.style.height = `${cardUnder.offsetHeight}px`;
+      gridDropIndicator.style.display = 'block';
     }
 
-    // The grid area accepts every internal drag, gaps and empty space included
+    function hideDropIndicator() {
+      hasValidDropTarget = false;
+      targetDropPhotoId = undefined;
+      activeDropCard = null;
+      activeDropIsBefore = null;
+      if (gridDropIndicator) {
+        gridDropIndicator.style.display = 'none';
+      }
+    }
+
+    // Grid container dragover handler for updating the insertion line in real time
+    // ponytail: synchronous execution in native dragover bypasses macOS rAF event-loop starvation.
     ['dragenter', 'dragover'].forEach(eventName => {
       gridViewContainer.addEventListener(eventName, (e) => {
-        if (dragSrcIndex === null || !gridPlaceholder) return;
+        if (dragSrcIndex === null) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
-        const slot = resolveDropSlot(e.clientX, e.clientY);
-        if (slot.ref !== undefined) animatePlaceholderMove(gridViewContainer, slot.ref);
+        lastDragPoint = { x: e.clientX, y: e.clientY };
+        updateDropIndicator(e.clientX, e.clientY, e.target);
       });
     });
 
-    // FLIP animation to smoothly slide cards when placeholder moves
-    function animatePlaceholderMove(targetParent, refNode) {
-      if (gridPlaceholder.parentNode === targetParent) {
-        if (gridPlaceholder === refNode || gridPlaceholder.nextSibling === refNode) {
-          return;
-        }
+    gridViewContainer.addEventListener('dragleave', (e) => {
+      if (!gridViewContainer.contains(e.relatedTarget)) {
+        hideDropIndicator();
       }
+    });
 
-      const cards = Array.from(gridViewContainer.querySelectorAll('div[data-photo-id]'));
-      const firstMap = new Map();
-      for (let i = 0; i < cards.length; i++) {
-        firstMap.set(cards[i], cards[i].getBoundingClientRect());
-      }
-
-      if (refNode) {
-        targetParent.insertBefore(gridPlaceholder, refNode);
-      } else {
-        targetParent.appendChild(gridPlaceholder);
-      }
-
-      for (let i = 0; i < cards.length; i++) {
-        const c = cards[i];
-        const first = firstMap.get(c);
-        if (!first) continue;
-        const last = c.getBoundingClientRect();
-        const dx = first.left - last.left;
-        const dy = first.top - last.top;
-        if (dx !== 0 || dy !== 0) {
-          c.style.transform = `translate(${dx}px, ${dy}px)`;
-          c.style.transition = 'none';
-        }
-      }
-
-      requestAnimationFrame(() => {
-        for (let i = 0; i < cards.length; i++) {
-          const c = cards[i];
-          if (c.style.transform) {
-            c.style.transition = 'transform 200ms cubic-bezier(0.2, 0, 0, 1)';
-            c.style.transform = '';
-          }
-        }
-      });
-    }
-
-    function handleBatchDrop(rawDragData) {
-      gridPlaceholder.style.display = 'none';
-      document.querySelectorAll('#gridViewContainer > div[data-photo-id]').forEach(c => {
-        c.style.transition = '';
-        c.style.transform = '';
+    function handleBatchDrop(rawDragData, targetPhotoId) {
+      document.querySelectorAll('#gridViewContainer > .opacity-30').forEach(c => {
         c.classList.remove('opacity-30', 'scale-95');
       });
 
@@ -1442,24 +1579,23 @@
         dragIds = [photos[dragSrcIndex]?.id].filter(Boolean);
       }
 
-      const cardNodes = [...gridViewContainer.querySelectorAll('div[data-photo-id]')];
-      const placeholderIdx = [...gridViewContainer.children].indexOf(gridPlaceholder);
-      const cardsBefore = cardNodes.filter(c => {
-        const ci = [...gridViewContainer.children].indexOf(c);
-        return ci < placeholderIdx && !dragIds.includes(c.dataset.photoId);
-      });
-      const insertPos = cardsBefore.length;
-
       const draggedPhotos = photos.filter(p => dragIds.includes(p.id));
+      if (draggedPhotos.length === 0) return;
+
       const remainingPhotos = photos.filter(p => !dragIds.includes(p.id));
-      remainingPhotos.splice(insertPos, 0, ...draggedPhotos);
+      const insertPos = (targetPhotoId !== null && targetPhotoId !== undefined)
+        ? remainingPhotos.findIndex(p => p.id === targetPhotoId)
+        : remainingPhotos.length;
+
+      const safeInsertPos = insertPos === -1 ? remainingPhotos.length : insertPos;
+      remainingPhotos.splice(safeInsertPos, 0, ...draggedPhotos);
       photos = remainingPhotos;
 
       setSortMode('MANUAL');
       updateTableAndNames();
       const label = draggedPhotos.length > 1
-        ? `${draggedPhotos.length} foto spostate alla posizione #${insertPos + 1}`
-        : `Foto riordinata alla posizione #${insertPos + 1}`;
+        ? `${draggedPhotos.length} foto spostate alla posizione #${safeInsertPos + 1}`
+        : `Foto riordinata alla posizione #${safeInsertPos + 1}`;
       showToast(label, '⇅');
     }
 
@@ -1520,7 +1656,7 @@
             </td>
             <td class="py-3 px-3">
               <div class="w-12 h-12 rounded-xl bg-slate-100 border border-slate-200 overflow-hidden relative group/img cursor-pointer shadow-2xs hover:scale-105 transition-transform" onclick="openMetadataInspector('${photo.id}')" title="Ispeziona metadati">
-                ${photo.previewUrl ? `<img src="${photo.previewUrl}" draggable="false" alt="${photo.originalName}" class="w-full h-full object-cover select-none pointer-events-none">` : `<div class="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-400">RAW</div>`}
+                ${photo.previewUrl ? `<img src="${photo.previewUrl}" decoding="async" loading="lazy" draggable="false" alt="${photo.originalName}" class="w-full h-full object-cover select-none pointer-events-none">` : `<div class="w-full h-full flex items-center justify-center text-[10px] font-bold text-slate-400">RAW</div>`}
               </div>
             </td>
             <td class="py-3 px-4">
@@ -1647,14 +1783,15 @@
         });
 
         // Render Grid
-        gridViewContainer.querySelectorAll('div[data-photo-id], .grid-drop-placeholder').forEach(c => c.remove());
-        // ponytail: clearing only card/placeholder nodes instead of innerHTML avoids re-parsing the whole grid; fine for typical photo sets under 2000 items.
-
-      // Shared drop placeholder element for the live animated drag preview
-      gridPlaceholder = document.createElement('div');
-      gridPlaceholder.className = 'grid-drop-placeholder';
-      gridPlaceholder.style.display = 'none';
-      gridViewContainer.appendChild(gridPlaceholder);
+        gridViewContainer.querySelectorAll('div[data-photo-id]').forEach(c => c.remove());
+        // ponytail: clearing only card nodes preserves the persistent insertion line element.
+        if (!gridDropIndicator || !gridViewContainer.contains(gridDropIndicator)) {
+          gridDropIndicator = document.getElementById('gridDropIndicator') || document.createElement('div');
+          gridDropIndicator.id = 'gridDropIndicator';
+          gridDropIndicator.className = 'grid-drop-indicator';
+          gridDropIndicator.style.display = 'none';
+          gridViewContainer.appendChild(gridDropIndicator);
+        }
 
       photos.forEach((photo, idx) => {
         const card = document.createElement('div');
@@ -1667,7 +1804,7 @@
 
         card.innerHTML = `
           <div class="aspect-square bg-slate-100 rounded-lg overflow-hidden relative">
-            ${photo.previewUrl ? `<img src="${photo.previewUrl}" draggable="false" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 pointer-events-none select-none" alt="${photo.newName}">` : `<div class="w-full h-full flex items-center justify-center font-bold text-slate-400 font-mono text-[10px]">FILE</div>`}
+            ${photo.previewUrl ? `<img src="${photo.previewUrl}" decoding="async" loading="lazy" draggable="false" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 pointer-events-none select-none" alt="${photo.newName}">` : `<div class="w-full h-full flex items-center justify-center font-bold text-slate-400 font-mono text-[10px]">FILE</div>`}
             <span class="absolute top-1 left-1 bg-slate-900/80 backdrop-blur-md px-1.5 py-0.5 rounded-md text-[9px] font-mono font-bold text-white">#${idx + 1}</span>
             ${isSelected ? '<span class="absolute top-1 right-1 w-4 h-4 bg-brand-600 rounded-full flex items-center justify-center text-white text-[8px] font-bold shadow">✓</span>' : ''}
           </div>
@@ -1691,43 +1828,40 @@
           openMetadataInspector(photo.id);
         });
 
-        // Grid Card Drag & Drop reorder (batch-aware with smooth live FLIP animation)
+        // Grid Card Drag & Drop reorder (batch-aware with lightweight insertion indicator)
         card.addEventListener('dragstart', (e) => {
           if (!selectedIds.has(photo.id)) {
             clearSelection();
           }
           dragSrcIndex = idx;
+          document.body.classList.add('is-dragging');
           e.dataTransfer.effectAllowed = 'move';
           const dragIds = selectedIds.size > 0 ? [...selectedIds] : [photo.id];
           draggedIdsJson = JSON.stringify(dragIds);
           e.dataTransfer.setData('text/plain', draggedIdsJson);
           setTimeout(() => {
-            document.querySelectorAll('#gridViewContainer > div[data-photo-id]').forEach(c => {
-              if (dragIds.includes(c.dataset.photoId)) {
+            if (dragIds.length > 1) {
+              document.querySelectorAll('#gridViewContainer > .grid-card-selected').forEach(c => {
                 c.classList.add('opacity-30', 'scale-95');
-              }
-            });
-            gridPlaceholder.style.display = '';
+              });
+            } else {
+              card.classList.add('opacity-30', 'scale-95');
+            }
           }, 0);
         });
 
         card.addEventListener('dragend', () => {
-          // The release is authoritative: the browser can end a drag without dispatching a drop
-          // (the FLIP animation slides cards out from under the cursor), so the slot is resolved
-          // one last time from the pointer position and committed here.
-          const slot = lastDragPoint ? resolveDropSlot(lastDragPoint.x, lastDragPoint.y) : { inside: false };
-          if (slot.inside) {
-            if (slot.ref !== undefined) gridViewContainer.insertBefore(gridPlaceholder, slot.ref);
-            handleBatchDrop(draggedIdsJson);
-          } else {
-            document.querySelectorAll('#gridViewContainer > div[data-photo-id]').forEach(c => {
-              c.classList.remove('opacity-30', 'scale-95');
-              c.style.transition = '';
-              c.style.transform = '';
-            });
-            gridPlaceholder.style.display = 'none';
-            gridViewContainer.appendChild(gridPlaceholder);
+          document.body.classList.remove('is-dragging');
+          document.querySelectorAll('#gridViewContainer > .opacity-30').forEach(c => {
+            c.classList.remove('opacity-30', 'scale-95');
+          });
+
+          // Commit reorder if dropped onto a valid target slot inside the grid
+          if (hasValidDropTarget && targetDropPhotoId !== undefined) {
+            handleBatchDrop(draggedIdsJson, targetDropPhotoId);
           }
+
+          hideDropIndicator();
           dragSrcIndex = null;
           lastDragPoint = null;
         });
