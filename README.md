@@ -16,7 +16,10 @@ A client-side photo sorting and batch renaming studio designed for macOS photogr
    - Resolves multi-camera drift and burst sequence collision.
 2. **Manual & Drop Sequencing (`MANUAL`)**:
    - **FIFO Drop Sequencing**: When dropping photos progressively, files preserve their exact arrival sequence without forcing an EXIF timestamp reorder.
-   - **In-App Drag & Drop Reordering**: Table rows and grid cards can be freely dragged up or down to set the exact order of renaming.
+   - **In-App Drag & Drop Reordering**: Table rows and grid cards can be freely dragged up or down to set the exact order of renaming. In grid view, a live animated FLIP placeholder dynamically shifts other cards to visually reveal the landing destination before mouse release.
+   - **Multi-Selection Batch Reorder** (Grid View): `Ctrl/⌘+click` toggles individual cards, `Shift+click` selects contiguous ranges. Dragging any selected card moves the entire selection as a batch while preserving relative order. Double-click opens the metadata inspector.
+   - **Snug Compact Grid Cards**: Minimalist cards displaying exclusively the uncropped image preview (`object-contain`) and the target file name, omitting unnecessary metadata noise.
+   - **Zoom Controls & Fullscreen Grid Mode**: Dual-mode zoom slider allows resizing cards between 70px and 250px in both standard and fullscreen views. Fullscreen expands to the entire screen with sticky toolbar and `Esc` key dismissal.
    - **Quick Nudge Controls**: Dedicated ▲ and ▼ buttons on each table row provide instant single-click position shifting.
    - Automatically switches to manual sorting whenever an item is moved.
 3. **Collision Detection & Duplicate Prevention**:

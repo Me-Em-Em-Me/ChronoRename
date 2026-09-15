@@ -80,6 +80,98 @@
       color: #0f172a;
       box-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
     }
+
+    /* Grid View layout and sizing driven by --grid-card-size CSS variable */
+    #gridViewContainer {
+      grid-template-columns: repeat(auto-fill, minmax(var(--grid-card-size, 120px), 1fr)) !important;
+      gap: 6px !important;
+    }
+
+    /* Snug photo cards — minimal white frame around photo + name */
+    div[data-photo-id] {
+      padding: 4px !important;
+      gap: 2px !important;
+      border-radius: 10px !important;
+      user-select: none;
+    }
+    div[data-photo-id] .aspect-square {
+      aspect-ratio: 4/3 !important;
+      border-radius: 7px !important;
+      background: #f8fafc;
+      overflow: hidden;
+    }
+    div[data-photo-id] .aspect-square img {
+      object-fit: contain !important;
+      background: #f8fafc;
+    }
+    div[data-photo-id] .card-name {
+      font-size: 9.5px !important;
+      padding: 1px 2px !important;
+      text-align: center;
+      line-height: 1.15;
+    }
+
+    /* Fullscreen grid mode */
+    .grid-fullscreen {
+      position: fixed !important;
+      inset: 0 !important;
+      z-index: 60 !important;
+      max-height: 100vh !important;
+      height: 100vh !important;
+      border-radius: 0 !important;
+      overflow-y: auto !important;
+      background: #f1f5f9 !important;
+      padding: 8px !important;
+      gap: 6px !important;
+      grid-template-columns: repeat(auto-fill, minmax(var(--grid-card-size, 120px), 1fr)) !important;
+    }
+    .grid-fullscreen > div[data-photo-id] {
+      padding: 3px !important;
+      border-radius: 8px !important;
+    }
+    .grid-fullscreen > div[data-photo-id] .aspect-square {
+      border-radius: 6px !important;
+    }
+    .grid-fullscreen > div[data-photo-id] .card-name {
+      font-size: 9px !important;
+    }
+    .grid-fullscreen-toolbar {
+      position: sticky;
+      top: 0;
+      z-index: 61;
+      grid-column: 1 / -1;
+      background: rgba(255,255,255,0.94);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid #e2e8f0;
+      border-radius: 12px;
+      margin-bottom: 4px;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Multi-select card highlight */
+    .grid-card-selected {
+      outline: 3px solid #4f46e5 !important;
+      outline-offset: -1px;
+      background-color: #ede9fe !important;
+    }
+
+    /* Animated Drop placeholder showing destination slot */
+    .grid-drop-placeholder {
+      border: 2px dashed #6366f1 !important;
+      background: rgba(99, 102, 241, 0.08) !important;
+      border-radius: 8px !important;
+      aspect-ratio: 4 / 3 !important;
+      box-shadow: inset 0 0 14px rgba(99, 102, 241, 0.16);
+      animation: placeholder-pulse 1.2s ease-in-out infinite;
+      pointer-events: none;
+    }
+    @keyframes placeholder-pulse {
+      0%, 100% { border-color: #6366f1; background: rgba(99, 102, 241, 0.05); }
+      50% { border-color: #4338ca; background: rgba(99, 102, 241, 0.15); }
+    }
   </style>
 </head>
 <body class="min-h-full flex flex-col bg-[#f8fafc] text-slate-800 selection:bg-brand-600 selection:text-white antialiased">
@@ -106,7 +198,7 @@
               ChronoRename <span class="text-brand-600 font-extrabold">Studio</span>
             </h1>
             <span class="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200 whitespace-nowrap">
-              v1.0 Pro
+              v1.1
             </span>
           </div>
           <p class="text-[11px] text-slate-400 font-medium tracking-tight truncate">Ordinamento cronologico ad alta precisione EXIF & XMP</p>
@@ -511,17 +603,32 @@
           </div>
 
           <!-- View Switcher -->
-          <div class="bg-slate-100 p-1 rounded-xl border border-slate-200/80 inline-flex items-center gap-1 text-xs font-semibold">
-            <button id="viewListBtn" class="px-3 py-1.5 rounded-lg segment-active flex items-center gap-1.5 transition-all cursor-pointer">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
-              <span>Elenco</span>
+          <div class="flex items-center gap-2.5">
+            <div class="bg-slate-100 p-1 rounded-xl border border-slate-200/80 inline-flex items-center gap-1 text-xs font-semibold">
+              <button id="viewListBtn" class="px-3 py-1.5 rounded-lg segment-active flex items-center gap-1.5 transition-all cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+                <span>Elenco</span>
+              </button>
+              <button id="viewGridBtn" class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 flex items-center gap-1.5 transition-all cursor-pointer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+                <span>Griglia</span>
+              </button>
+            </div>
+            <!-- Zoom slider for grid view -->
+            <div id="gridZoomContainer" class="hidden items-center gap-1 px-2.5 py-1 bg-slate-100 rounded-xl border border-slate-200/80">
+              <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"/></svg>
+              <input type="range" id="headerZoomSlider" min="70" max="250" value="120" class="w-16 sm:w-20 h-1 accent-indigo-500 cursor-pointer" title="Dimensione miniature">
+              <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"/></svg>
+            </div>
+            <button id="btnGridFullscreen" class="hidden px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-brand-50 text-slate-600 hover:text-brand-700 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-subtle" title="Visualizza griglia a schermo intero">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+              <span>Schermo Intero</span>
             </button>
-            <button id="viewGridBtn" class="px-3 py-1.5 rounded-lg text-slate-600 hover:text-slate-900 flex items-center gap-1.5 transition-all cursor-pointer">
-              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
-              <span>Griglia</span>
-            </button>
+            <span id="selectionBadge" class="hidden text-[11px] font-bold text-brand-700 bg-brand-50 border border-brand-200/80 px-2.5 py-1 rounded-lg items-center gap-1.5">
+              <svg class="w-3.5 h-3.5 text-brand-600 shrink-0 inline" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+              <span id="selectionCount">0</span> selezionate
+            </span>
           </div>
-        </div>
 
         <!-- Table View Container -->
         <div id="tableViewContainer" class="overflow-x-auto max-h-[580px]">
@@ -700,10 +807,137 @@
 
     const viewListBtn = document.getElementById('viewListBtn');
     const viewGridBtn = document.getElementById('viewGridBtn');
+    const btnGridFullscreen = document.getElementById('btnGridFullscreen');
+    const gridZoomContainer = document.getElementById('gridZoomContainer');
+    const headerZoomSlider = document.getElementById('headerZoomSlider');
+    const selectionBadge = document.getElementById('selectionBadge');
+    const selectionCount = document.getElementById('selectionCount');
     const btnHelp = document.getElementById('btnHelp');
     const helpModal = document.getElementById('helpModal');
     const btnCloseHelp = document.getElementById('btnCloseHelp');
     const btnCloseHelpBtn = document.getElementById('btnCloseHelpBtn');
+
+    /* Multi-selection state for grid view */
+    let selectedIds = new Set();
+    let lastClickedIndex = null;
+    let isGridFullscreen = false;
+
+    function toggleSelection(photoId, index, ctrlKey, shiftKey) {
+      if (shiftKey && lastClickedIndex !== null) {
+        // Range select from last clicked to current
+        const start = Math.min(lastClickedIndex, index);
+        const end = Math.max(lastClickedIndex, index);
+        for (let i = start; i <= end; i++) {
+          selectedIds.add(photos[i].id);
+        }
+      } else if (ctrlKey || (event && event.metaKey)) {
+        // Toggle single item (Ctrl on Win, Cmd on Mac)
+        if (selectedIds.has(photoId)) {
+          selectedIds.delete(photoId);
+        } else {
+          selectedIds.add(photoId);
+        }
+      } else {
+        // Plain click: select only this one (or deselect if it's the only one selected)
+        if (selectedIds.size === 1 && selectedIds.has(photoId)) {
+          selectedIds.clear();
+        } else {
+          selectedIds.clear();
+          selectedIds.add(photoId);
+        }
+      }
+      lastClickedIndex = index;
+      updateSelectionUI();
+    }
+
+    function updateSelectionUI() {
+      const count = selectedIds.size;
+      if (count > 0) {
+        selectionBadge.classList.remove('hidden');
+        selectionBadge.classList.add('inline-flex');
+        selectionCount.innerText = count;
+      } else {
+        selectionBadge.classList.add('hidden');
+        selectionBadge.classList.remove('inline-flex');
+      }
+      // Update visual state of grid cards
+      document.querySelectorAll('#gridViewContainer > div[data-photo-id]').forEach(card => {
+        if (selectedIds.has(card.dataset.photoId)) {
+          card.classList.add('grid-card-selected');
+        } else {
+          card.classList.remove('grid-card-selected');
+        }
+      });
+    }
+
+    function clearSelection() {
+      selectedIds.clear();
+      lastClickedIndex = null;
+      updateSelectionUI();
+    }
+
+    let gridCardSize = 120; // default card size in px
+
+    function applyGridZoom(size) {
+      gridCardSize = size;
+      gridViewContainer.style.setProperty('--grid-card-size', size + 'px');
+      const fsSlider = document.getElementById('gridZoomSlider');
+      if (fsSlider) fsSlider.value = size;
+      if (headerZoomSlider) headerZoomSlider.value = size;
+    }
+
+    if (headerZoomSlider) {
+      headerZoomSlider.addEventListener('input', (e) => {
+        applyGridZoom(parseInt(e.target.value, 10));
+      });
+    }
+
+    function toggleGridFullscreen() {
+      isGridFullscreen = !isGridFullscreen;
+      if (isGridFullscreen) {
+        gridViewContainer.classList.add('grid-fullscreen');
+        applyGridZoom(gridCardSize);
+        document.body.style.overflow = 'hidden';
+        btnGridFullscreen.innerHTML = `
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 9V4.5M9 9H4.5M9 9L3.5 3.5M9 15v4.5M9 15H4.5M9 15l-5.5 5.5M15 9h4.5M15 9V4.5M15 9l5.5-5.5M15 15h4.5M15 15v4.5m0-4.5l5.5 5.5"/></svg>
+          <span>Chiudi</span>`;
+        const toolbar = document.createElement('div');
+        toolbar.id = 'gridFullscreenToolbar';
+        toolbar.className = 'grid-fullscreen-toolbar';
+        toolbar.innerHTML = `
+          <div class="flex items-center gap-2.5">
+            <span class="text-xs font-bold text-slate-800">${photos.length} foto</span>
+            <span id="fsSelectionBadge" class="${selectedIds.size > 0 ? 'inline-flex' : 'hidden'} text-[10px] font-bold text-brand-700 bg-brand-50 border border-brand-200/80 px-2 py-0.5 rounded-md items-center gap-1">
+              ${selectedIds.size} sel.
+            </span>
+            <span class="text-[10px] text-slate-400">⌘/Ctrl+click · Shift+click</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <div class="flex items-center gap-1.5">
+              <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM13 10H7"/></svg>
+              <input type="range" id="gridZoomSlider" min="70" max="250" value="${gridCardSize}" class="w-20 h-1 accent-indigo-500 cursor-pointer" title="Dimensione miniature">
+              <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"/></svg>
+            </div>
+            <button id="btnExitFullscreen" class="px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-600 text-[11px] font-semibold flex items-center gap-1 transition-all cursor-pointer">
+              <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+              Esci
+            </button>
+          </div>`;
+        gridViewContainer.insertBefore(toolbar, gridViewContainer.firstChild);
+        document.getElementById('btnExitFullscreen').addEventListener('click', toggleGridFullscreen);
+        document.getElementById('gridZoomSlider').addEventListener('input', (e) => {
+          applyGridZoom(parseInt(e.target.value, 10));
+        });
+      } else {
+        gridViewContainer.classList.remove('grid-fullscreen');
+        document.body.style.overflow = '';
+        btnGridFullscreen.innerHTML = `
+          <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>
+          <span>Schermo Intero</span>`;
+        const toolbar = document.getElementById('gridFullscreenToolbar');
+        if (toolbar) toolbar.remove();
+      }
+    }
 
     /* Toast notification */
     function showToast(message, icon = '✅') {
@@ -1248,72 +1482,215 @@
         photoTableBody.appendChild(tr);
       });
 
-      // Render Grid
-      gridViewContainer.innerHTML = '';
+      // Render Grid (preserving fullscreen toolbar if present)
+      const existingToolbar = document.getElementById('gridFullscreenToolbar');
+      gridViewContainer.querySelectorAll('div[data-photo-id], .grid-drop-placeholder').forEach(c => c.remove());
+      // ponytail: clearing only card/placeholder nodes instead of innerHTML preserves the fullscreen toolbar if active; fine for typical photo sets under 2000 items.
+
+      // Shared drop placeholder element for live animated drag preview
+      let gridPlaceholder = document.createElement('div');
+      gridPlaceholder.className = 'grid-drop-placeholder';
+      gridPlaceholder.style.display = 'none';
+      gridViewContainer.appendChild(gridPlaceholder);
+
+      // FLIP animation to smoothly slide cards when placeholder moves
+      function animatePlaceholderMove(targetParent, refNode) {
+        if (gridPlaceholder.parentNode === targetParent) {
+          if (gridPlaceholder === refNode || gridPlaceholder.nextSibling === refNode) {
+            return;
+          }
+        }
+
+        const cards = Array.from(gridViewContainer.querySelectorAll('div[data-photo-id]'));
+        const firstMap = new Map();
+        for (let i = 0; i < cards.length; i++) {
+          firstMap.set(cards[i], cards[i].getBoundingClientRect());
+        }
+
+        if (refNode) {
+          targetParent.insertBefore(gridPlaceholder, refNode);
+        } else {
+          targetParent.appendChild(gridPlaceholder);
+        }
+
+        for (let i = 0; i < cards.length; i++) {
+          const c = cards[i];
+          const first = firstMap.get(c);
+          if (!first) continue;
+          const last = c.getBoundingClientRect();
+          const dx = first.left - last.left;
+          const dy = first.top - last.top;
+          if (dx !== 0 || dy !== 0) {
+            c.style.transform = `translate(${dx}px, ${dy}px)`;
+            c.style.transition = 'none';
+          }
+        }
+
+        requestAnimationFrame(() => {
+          for (let i = 0; i < cards.length; i++) {
+            const c = cards[i];
+            if (c.style.transform) {
+              c.style.transition = 'transform 200ms cubic-bezier(0.2, 0, 0, 1)';
+              c.style.transform = '';
+            }
+          }
+        });
+      }
+
+      function handleBatchDrop(rawDragData) {
+        gridPlaceholder.style.display = 'none';
+        document.querySelectorAll('#gridViewContainer > div[data-photo-id]').forEach(c => {
+          c.style.transition = '';
+          c.style.transform = '';
+          c.classList.remove('opacity-30', 'scale-95');
+        });
+
+        let dragIds;
+        try {
+          dragIds = JSON.parse(rawDragData);
+        } catch {
+          dragIds = [photos[dragSrcIndex]?.id].filter(Boolean);
+        }
+        if (!dragIds || dragIds.length === 0) {
+          dragIds = [photos[dragSrcIndex]?.id].filter(Boolean);
+        }
+
+        const cardNodes = [...gridViewContainer.querySelectorAll('div[data-photo-id]')];
+        const placeholderIdx = [...gridViewContainer.children].indexOf(gridPlaceholder);
+        const cardsBefore = cardNodes.filter(c => {
+          const ci = [...gridViewContainer.children].indexOf(c);
+          return ci < placeholderIdx && !dragIds.includes(c.dataset.photoId);
+        });
+        const insertPos = cardsBefore.length;
+
+        const draggedPhotos = photos.filter(p => dragIds.includes(p.id));
+        const remainingPhotos = photos.filter(p => !dragIds.includes(p.id));
+        remainingPhotos.splice(insertPos, 0, ...draggedPhotos);
+        photos = remainingPhotos;
+
+        setSortMode('MANUAL');
+        updateTableAndNames();
+        const label = draggedPhotos.length > 1
+          ? `${draggedPhotos.length} foto spostate alla posizione #${insertPos + 1}`
+          : `Foto riordinata alla posizione #${insertPos + 1}`;
+        showToast(label, '⇅');
+      }
+
       photos.forEach((photo, idx) => {
         const card = document.createElement('div');
+        const isSelected = selectedIds.has(photo.id);
         const cardBorder = photo.isDuplicate ? 'border-rose-400 bg-rose-50/50' : 'border-slate-200 hover:border-brand-500 bg-white';
-        card.className = `${cardBorder} border rounded-2xl overflow-hidden p-2.5 flex flex-col gap-2 relative cursor-pointer shadow-subtle hover:shadow-card transition-all group`;
+        card.className = `${cardBorder} border rounded-xl overflow-hidden p-1 flex flex-col gap-1 relative cursor-pointer shadow-subtle hover:shadow-card transition-all group ${isSelected ? 'grid-card-selected' : ''}`;
         card.setAttribute('draggable', 'true');
+        card.dataset.photoId = photo.id;
+        card.dataset.index = idx;
 
         card.innerHTML = `
-          <div class="aspect-square bg-slate-100 rounded-xl overflow-hidden relative">
-            ${photo.previewUrl ? `<img src="${photo.previewUrl}" draggable="false" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 pointer-events-none select-none" alt="${photo.newName}">` : `<div class="w-full h-full flex items-center justify-center font-bold text-slate-400 font-mono">FILE</div>`}
-            <span class="absolute top-2 left-2 bg-slate-900/80 backdrop-blur-md px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold text-white">#${idx + 1}</span>
+          <div class="aspect-square bg-slate-100 rounded-lg overflow-hidden relative">
+            ${photo.previewUrl ? `<img src="${photo.previewUrl}" draggable="false" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 pointer-events-none select-none" alt="${photo.newName}">` : `<div class="w-full h-full flex items-center justify-center font-bold text-slate-400 font-mono text-[10px]">FILE</div>`}
+            <span class="absolute top-1 left-1 bg-slate-900/80 backdrop-blur-md px-1.5 py-0.5 rounded-md text-[9px] font-mono font-bold text-white">#${idx + 1}</span>
+            ${isSelected ? '<span class="absolute top-1 right-1 w-4 h-4 bg-brand-600 rounded-full flex items-center justify-center text-white text-[8px] font-bold shadow">✓</span>' : ''}
           </div>
-          <div class="flex flex-col gap-0.5 px-1">
-            <span class="text-[11px] font-mono font-bold truncate ${photo.isDuplicate ? 'text-rose-700' : 'text-emerald-700'}" title="${photo.newName}">${photo.newName}</span>
-            <span class="text-[10px] text-slate-400 font-mono truncate">${photo.formattedDate.full}</span>
-          </div>
+          <span class="card-name text-[10px] font-mono font-bold truncate px-0.5 ${photo.isDuplicate ? 'text-rose-700' : 'text-emerald-700'}" title="${photo.newName}">${photo.newName}</span>
         `;
 
+        // Click handler: Ctrl/Cmd for toggle, Shift for range, plain for single select or inspect
         card.addEventListener('click', (e) => {
+          if (e.ctrlKey || e.metaKey || e.shiftKey) {
+            e.preventDefault();
+            toggleSelection(photo.id, idx, e.ctrlKey || e.metaKey, e.shiftKey);
+          } else if (selectedIds.size > 0) {
+            toggleSelection(photo.id, idx, false, false);
+          } else {
+            openMetadataInspector(photo.id);
+          }
+        });
+
+        card.addEventListener('dblclick', (e) => {
+          e.preventDefault();
           openMetadataInspector(photo.id);
         });
 
-        // Grid Card Drag & Drop reorder
+        // Grid Card Drag & Drop reorder (batch-aware with smooth live FLIP animation)
         card.addEventListener('dragstart', (e) => {
+          if (!selectedIds.has(photo.id)) {
+            clearSelection();
+          }
           dragSrcIndex = idx;
           e.dataTransfer.effectAllowed = 'move';
-          e.dataTransfer.setData('text/plain', String(idx));
-          setTimeout(() => card.classList.add('opacity-40', 'scale-95'), 0);
+          const dragIds = selectedIds.size > 0 ? [...selectedIds] : [photo.id];
+          e.dataTransfer.setData('text/plain', JSON.stringify(dragIds));
+          setTimeout(() => {
+            document.querySelectorAll('#gridViewContainer > div[data-photo-id]').forEach(c => {
+              if (dragIds.includes(c.dataset.photoId)) {
+                c.classList.add('opacity-30', 'scale-95');
+              }
+            });
+            gridPlaceholder.style.display = '';
+          }, 0);
         });
 
         card.addEventListener('dragend', () => {
-          card.classList.remove('opacity-40', 'scale-95');
+          document.querySelectorAll('#gridViewContainer > div[data-photo-id]').forEach(c => {
+            c.classList.remove('opacity-30', 'scale-95');
+            c.style.transition = '';
+            c.style.transform = '';
+          });
           dragSrcIndex = null;
-          document.querySelectorAll('#gridViewContainer > div').forEach(c => c.classList.remove('ring-2', 'ring-brand-500'));
+          gridPlaceholder.style.display = 'none';
+          gridViewContainer.appendChild(gridPlaceholder);
         });
 
         card.addEventListener('dragover', (e) => {
           if (dragSrcIndex === null) return;
           e.preventDefault();
           e.dataTransfer.dropEffect = 'move';
-          card.classList.add('ring-2', 'ring-brand-500');
-        });
-
-        card.addEventListener('dragleave', () => {
-          card.classList.remove('ring-2', 'ring-brand-500');
+          const rect = card.getBoundingClientRect();
+          const midX = rect.left + rect.width / 2;
+          const refNode = (e.clientX < midX) ? card : card.nextSibling;
+          animatePlaceholderMove(card.parentNode, refNode);
         });
 
         card.addEventListener('drop', (e) => {
-          card.classList.remove('ring-2', 'ring-brand-500');
           if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             e.preventDefault();
             processFiles(e.dataTransfer.files);
             return;
           }
-          if (dragSrcIndex === null || dragSrcIndex === idx) return;
+          if (dragSrcIndex === null) return;
           e.preventDefault();
-          const [movedPhoto] = photos.splice(dragSrcIndex, 1);
-          photos.splice(idx, 0, movedPhoto);
-          setSortMode('MANUAL');
-          updateTableAndNames();
-          showToast(`Foto riordinata alla posizione #${idx + 1}`, '⇅');
+          e.stopPropagation();
+          handleBatchDrop(e.dataTransfer.getData('text/plain'));
         });
 
         gridViewContainer.appendChild(card);
       });
+
+      // Allow drops on the placeholder element and empty grid space
+      gridPlaceholder.addEventListener('dragover', (e) => {
+        if (dragSrcIndex === null) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+      });
+      gridPlaceholder.addEventListener('drop', (e) => {
+        if (dragSrcIndex === null) return;
+        e.preventDefault();
+        e.stopPropagation();
+        handleBatchDrop(e.dataTransfer.getData('text/plain'));
+      });
+
+      // Update fullscreen toolbar badge if present
+      const fsBadge = document.getElementById('fsSelectionBadge');
+      if (fsBadge) {
+        if (selectedIds.size > 0) {
+          fsBadge.classList.remove('hidden');
+          fsBadge.classList.add('inline-flex');
+          fsBadge.textContent = `${selectedIds.size} sel.`;
+        } else {
+          fsBadge.classList.add('hidden');
+          fsBadge.classList.remove('inline-flex');
+        }
+      }
 
       generateBashScript();
     }
@@ -1531,6 +1908,13 @@
       viewGridBtn.classList.add('text-slate-600');
       tableViewContainer.classList.remove('hidden');
       gridViewContainer.classList.add('hidden');
+      btnGridFullscreen.classList.add('hidden');
+      btnGridFullscreen.classList.remove('flex');
+      gridZoomContainer.classList.add('hidden');
+      gridZoomContainer.classList.remove('inline-flex');
+      // Exit fullscreen if active
+      if (isGridFullscreen) toggleGridFullscreen();
+      clearSelection();
     });
 
     viewGridBtn.addEventListener('click', () => {
@@ -1540,9 +1924,25 @@
       viewListBtn.classList.add('text-slate-600');
       tableViewContainer.classList.add('hidden');
       gridViewContainer.classList.remove('hidden');
+      btnGridFullscreen.classList.remove('hidden');
+      btnGridFullscreen.classList.add('flex');
+      gridZoomContainer.classList.remove('hidden');
+      gridZoomContainer.classList.add('inline-flex');
+      applyGridZoom(gridCardSize);
+    });
+
+    btnGridFullscreen.addEventListener('click', toggleGridFullscreen);
+
+    // ESC key to exit fullscreen grid
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && isGridFullscreen) {
+        toggleGridFullscreen();
+      }
     });
 
     btnClearAll.addEventListener('click', () => {
+      if (isGridFullscreen) toggleGridFullscreen();
+      clearSelection();
       photos.forEach(p => {
         if (p.previewUrl) URL.revokeObjectURL(p.previewUrl);
       });
@@ -1553,6 +1953,10 @@
       dropZone.classList.remove('hidden');
       btnClearAll.classList.add('hidden');
       btnAddMoreHeader.classList.add('hidden');
+      btnGridFullscreen.classList.add('hidden');
+      btnGridFullscreen.classList.remove('flex');
+      gridZoomContainer.classList.add('hidden');
+      gridZoomContainer.classList.remove('inline-flex');
       collisionAlertBanner.classList.add('hidden');
       fileInput.value = '';
       addMoreFileInput.value = '';
