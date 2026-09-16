@@ -217,20 +217,24 @@
       box-shadow: 0 0 6px rgba(10, 132, 255, 0.9);
     }
 
-    /* Disable all hover effects, card transitions and pointer events on card internals during drag */
+    /* Drag state styles: zero layout shifts, grabbing cursor, disabled pointer interactions on card internals */
     body.is-dragging {
       user-select: none !important;
       -webkit-user-select: none !important;
+      cursor: grabbing !important;
+    }
+    #gridViewContainer > div[data-photo-id] {
+      cursor: grab;
+      touch-action: none;
     }
     body.is-dragging #gridViewContainer div[data-photo-id] {
+      cursor: grabbing !important;
       transition: none !important;
-      transform: none !important;
       box-shadow: none !important;
     }
     body.is-dragging #gridViewContainer div[data-photo-id] * {
       pointer-events: none !important;
       transition: none !important;
-      transform: none !important;
     }
   </style>
 </head>
@@ -1440,127 +1444,323 @@
       document.getElementById('metadataInspectorModal').classList.remove('hidden');
     }
 
-    /* Drag and drop reordering state */
+    /* State for row and grid drag reordering */
     let dragSrcIndex = null;
-    let draggedIdsJson = '';
-    let lastDragPoint = null;
     let targetDropPhotoId = undefined;
     let hasValidDropTarget = false;
     let gridDropIndicator = null;
-    let activeDropCard = null;
-    let activeDropIsBefore = null;
+    let suppressCardClickUntil = 0;
+    let lastRenderedLine = { x: null, y: null, h: null };
 
-    /* Updates the visual insertion line between cards in real time without lag */
-    function updateDropIndicator(clientX, clientY, target) {
-      if (!gridViewContainer || dragSrcIndex === null) return;
+    let pointerDragState = null;
+    let cachedGridCards = [];
+    let autoScrollSpeed = 0;
+    let autoScrollRaf = null;
 
-      // 1. Instant O(1) resolution via direct card target
-      let cardUnder = target ? target.closest('#gridViewContainer > div[data-photo-id]') : null;
-
-      // 2. Fallback when hovering directly over gaps or outer container space
-      if (!cardUnder) {
-        const lastId = photos[photos.length - 1]?.id;
-        const lastCard = lastId ? gridViewContainer.querySelector(`div[data-photo-id="${lastId}"]`) : null;
-        if (lastCard && clientY > lastCard.getBoundingClientRect().bottom) {
-          cardUnder = lastCard;
-        } else {
-          const under = document.elementFromPoint(clientX, clientY);
-          if (!under || !gridViewContainer.contains(under)) {
-            hideDropIndicator();
-            return;
-          }
-          cardUnder = under.closest('#gridViewContainer > div[data-photo-id]');
-          if (!cardUnder) {
-            const leftCheck = document.elementFromPoint(clientX - 6, clientY)?.closest('#gridViewContainer > div[data-photo-id]');
-            const rightCheck = document.elementFromPoint(clientX + 6, clientY)?.closest('#gridViewContainer > div[data-photo-id]');
-            cardUnder = leftCheck || rightCheck || null;
-          }
-        }
-      }
-
-      if (!cardUnder) {
-        hideDropIndicator();
-        return;
-      }
-
-      const cardRect = cardUnder.getBoundingClientRect();
-      const isPastLastRow = clientY > cardRect.bottom;
-      const isBefore = isPastLastRow ? false : (clientX < (cardRect.left + cardRect.width / 2));
-
-      // 3. Fast bail-out: if cursor is still targeting the exact same slot, do ZERO DOM work!
-      if (cardUnder === activeDropCard && isBefore === activeDropIsBefore) {
-        return;
-      }
-      activeDropCard = cardUnder;
-      activeDropIsBefore = isBefore;
-
-      let dragIds = [];
-      try {
-        dragIds = JSON.parse(draggedIdsJson) || [];
-      } catch (e) {}
-
-      if (isBefore) {
-        if (dragIds.includes(cardUnder.dataset.photoId)) {
-          let cur = cardUnder;
-          while (cur && (!cur.matches?.('div[data-photo-id]') || dragIds.includes(cur.dataset.photoId))) {
-            cur = cur.nextElementSibling;
-          }
-          targetDropPhotoId = cur ? cur.dataset.photoId : null;
-        } else {
-          targetDropPhotoId = cardUnder.dataset.photoId;
-        }
-      } else {
-        let cur = cardUnder.nextElementSibling;
-        while (cur && (!cur.matches?.('div[data-photo-id]') || dragIds.includes(cur.dataset.photoId))) {
-          cur = cur.nextElementSibling;
-        }
-        targetDropPhotoId = cur ? cur.dataset.photoId : null;
-      }
-
-      hasValidDropTarget = true;
-
-      // Position drop indicator using direct offset properties (relative to position:relative container)
-      const lineX = isBefore ? (cardUnder.offsetLeft - 3) : (cardUnder.offsetLeft + cardUnder.offsetWidth + 3);
-      const lineY = cardUnder.offsetTop;
-
+    function ensureDropIndicator() {
       if (!gridDropIndicator || !gridViewContainer.contains(gridDropIndicator)) {
         gridDropIndicator = document.getElementById('gridDropIndicator') || document.createElement('div');
         gridDropIndicator.id = 'gridDropIndicator';
         gridDropIndicator.className = 'grid-drop-indicator';
+        gridDropIndicator.style.display = 'none';
         gridViewContainer.appendChild(gridDropIndicator);
       }
-
-      gridDropIndicator.style.left = `${lineX}px`;
-      gridDropIndicator.style.top = `${lineY}px`;
-      gridDropIndicator.style.height = `${cardUnder.offsetHeight}px`;
-      gridDropIndicator.style.display = 'block';
+      return gridDropIndicator;
     }
 
     function hideDropIndicator() {
       hasValidDropTarget = false;
       targetDropPhotoId = undefined;
-      activeDropCard = null;
-      activeDropIsBefore = null;
+      lastRenderedLine = { x: null, y: null, h: null };
       if (gridDropIndicator) {
         gridDropIndicator.style.display = 'none';
       }
     }
 
-    // Grid container dragover handler for updating the insertion line in real time
-    // ponytail: synchronous execution in native dragover bypasses macOS rAF event-loop starvation.
+    function cacheGridCardGeometry() {
+      const cardEls = Array.from(gridViewContainer.querySelectorAll('div[data-photo-id]'));
+      cachedGridCards = cardEls.map((el, i) => ({
+        id: el.dataset.photoId,
+        index: i,
+        offsetLeft: el.offsetLeft,
+        offsetTop: el.offsetTop,
+        offsetWidth: el.offsetWidth,
+        offsetHeight: el.offsetHeight
+      }));
+    }
+
+    /* Computes the drop indicator position and destination photo with zero layout reflows */
+    function updatePointerDropIndicator(clientX, clientY) {
+      if (!pointerDragState || !pointerDragState.isDragging || cachedGridCards.length === 0) return;
+
+      const containerRect = gridViewContainer.getBoundingClientRect();
+
+      if (
+        clientX < containerRect.left - 40 ||
+        clientX > containerRect.right + 40 ||
+        clientY < containerRect.top - 40 ||
+        clientY > containerRect.bottom + 40
+      ) {
+        hideDropIndicator();
+        return;
+      }
+
+      const x = clientX - containerRect.left + gridViewContainer.scrollLeft;
+      const y = clientY - containerRect.top + gridViewContainer.scrollTop;
+
+      const dragIds = pointerDragState.dragIds;
+      const firstCard = cachedGridCards[0];
+      const lastCard = cachedGridCards[cachedGridCards.length - 1];
+
+      let lineX, lineY, lineH;
+
+      if (y < firstCard.offsetTop) {
+        let target = cachedGridCards.find(c => !dragIds.includes(c.id));
+        targetDropPhotoId = target ? target.id : null;
+        lineX = firstCard.offsetLeft - 3;
+        lineY = firstCard.offsetTop;
+        lineH = firstCard.offsetHeight;
+      } else if (y > lastCard.offsetTop + lastCard.offsetHeight) {
+        targetDropPhotoId = null;
+        lineX = lastCard.offsetLeft + lastCard.offsetWidth + 3;
+        lineY = lastCard.offsetTop;
+        lineH = lastCard.offsetHeight;
+      } else {
+        const rowCards = cachedGridCards.filter(c => {
+          return y >= (c.offsetTop - 10) && y <= (c.offsetTop + c.offsetHeight + 10);
+        });
+
+        const activeRow = rowCards.length > 0
+          ? rowCards
+          : [cachedGridCards.reduce((closest, c) => Math.abs(c.offsetTop - y) < Math.abs(closest.offsetTop - y) ? c : closest, firstCard)];
+
+        const rowFirst = activeRow[0];
+        const rowLast = activeRow[activeRow.length - 1];
+
+        if (x < rowFirst.offsetLeft + rowFirst.offsetWidth / 2) {
+          let startIdx = rowFirst.index;
+          let target = null;
+          for (let j = startIdx; j < cachedGridCards.length; j++) {
+            if (!dragIds.includes(cachedGridCards[j].id)) { target = cachedGridCards[j].id; break; }
+          }
+          targetDropPhotoId = target;
+          lineX = rowFirst.offsetLeft - 3;
+          lineY = rowFirst.offsetTop;
+          lineH = rowFirst.offsetHeight;
+        } else if (x >= rowLast.offsetLeft + rowLast.offsetWidth / 2) {
+          let startIdx = rowLast.index + 1;
+          let target = null;
+          for (let j = startIdx; j < cachedGridCards.length; j++) {
+            if (!dragIds.includes(cachedGridCards[j].id)) { target = cachedGridCards[j].id; break; }
+          }
+          targetDropPhotoId = target;
+          lineX = rowLast.offsetLeft + rowLast.offsetWidth + 3;
+          lineY = rowLast.offsetTop;
+          lineH = rowLast.offsetHeight;
+        } else {
+          let chosenCard = rowFirst;
+          let isBefore = true;
+          for (let i = 0; i < activeRow.length; i++) {
+            const c = activeRow[i];
+            const cardMid = c.offsetLeft + c.offsetWidth / 2;
+            if (x < cardMid) {
+              chosenCard = c;
+              isBefore = true;
+              break;
+            } else if (x <= c.offsetLeft + c.offsetWidth || i === activeRow.length - 1) {
+              chosenCard = c;
+              isBefore = false;
+              break;
+            }
+          }
+
+          let startIdx = isBefore ? chosenCard.index : chosenCard.index + 1;
+          let target = null;
+          for (let j = startIdx; j < cachedGridCards.length; j++) {
+            if (!dragIds.includes(cachedGridCards[j].id)) { target = cachedGridCards[j].id; break; }
+          }
+          targetDropPhotoId = target;
+          lineX = isBefore ? (chosenCard.offsetLeft - 3) : (chosenCard.offsetLeft + chosenCard.offsetWidth + 3);
+          lineY = chosenCard.offsetTop;
+          lineH = chosenCard.offsetHeight;
+        }
+      }
+
+      hasValidDropTarget = true;
+
+      if (lastRenderedLine.x === lineX && lastRenderedLine.y === lineY && lastRenderedLine.h === lineH) {
+        return;
+      }
+      lastRenderedLine = { x: lineX, y: lineY, h: lineH };
+
+      const indicator = ensureDropIndicator();
+      indicator.style.left = `${lineX}px`;
+      indicator.style.top = `${lineY}px`;
+      indicator.style.height = `${lineH}px`;
+      indicator.style.display = 'block';
+    }
+
+    function handleAutoScrollTick() {
+      if (pointerDragState && pointerDragState.isDragging && autoScrollSpeed !== 0) {
+        gridViewContainer.scrollTop += autoScrollSpeed;
+        if (pointerDragState.lastClientX !== undefined && pointerDragState.lastClientY !== undefined) {
+          updatePointerDropIndicator(pointerDragState.lastClientX, pointerDragState.lastClientY);
+        }
+        autoScrollRaf = requestAnimationFrame(handleAutoScrollTick);
+      } else {
+        autoScrollRaf = null;
+      }
+    }
+
+    function updateAutoScroll(clientY) {
+      const containerRect = gridViewContainer.getBoundingClientRect();
+      const threshold = 45;
+      const maxSpeed = 16;
+
+      if (clientY < containerRect.top + threshold) {
+        const factor = Math.min(1, Math.max(0, (containerRect.top + threshold - clientY) / threshold));
+        autoScrollSpeed = -Math.round(factor * maxSpeed);
+      } else if (clientY > containerRect.bottom - threshold) {
+        const factor = Math.min(1, Math.max(0, (clientY - (containerRect.bottom - threshold)) / threshold));
+        autoScrollSpeed = Math.round(factor * maxSpeed);
+      } else {
+        autoScrollSpeed = 0;
+      }
+
+      if (autoScrollSpeed !== 0 && !autoScrollRaf) {
+        autoScrollRaf = requestAnimationFrame(handleAutoScrollTick);
+      }
+    }
+
+    function stopAutoScroll() {
+      autoScrollSpeed = 0;
+      if (autoScrollRaf) {
+        cancelAnimationFrame(autoScrollRaf);
+        autoScrollRaf = null;
+      }
+    }
+
+    function onPointerMove(e) {
+      if (!pointerDragState || e.pointerId !== pointerDragState.pointerId) return;
+
+      pointerDragState.lastClientX = e.clientX;
+      pointerDragState.lastClientY = e.clientY;
+
+      if (!pointerDragState.isDragging) {
+        const dist = Math.hypot(e.clientX - pointerDragState.startX, e.clientY - pointerDragState.startY);
+        if (dist < 4) return;
+
+        pointerDragState.isDragging = true;
+        document.body.classList.add('is-dragging');
+
+        if (!selectedIds.has(pointerDragState.photoId)) {
+          clearSelection();
+          selectedIds.add(pointerDragState.photoId);
+          updateSelectionUI();
+        }
+
+        pointerDragState.dragIds = selectedIds.size > 0 ? [...selectedIds] : [pointerDragState.photoId];
+        cacheGridCardGeometry();
+
+        document.querySelectorAll('#gridViewContainer > div[data-photo-id]').forEach(c => {
+          if (pointerDragState.dragIds.includes(c.dataset.photoId)) {
+            c.classList.add('opacity-30', 'scale-95');
+          }
+        });
+      }
+
+      e.preventDefault();
+      updatePointerDropIndicator(e.clientX, e.clientY);
+      updateAutoScroll(e.clientY);
+    }
+
+    function onPointerUp(e) {
+      if (!pointerDragState || e.pointerId !== pointerDragState.pointerId) return;
+
+      stopAutoScroll();
+
+      if (pointerDragState.isDragging) {
+        suppressCardClickUntil = Date.now() + 150;
+
+        if (hasValidDropTarget && targetDropPhotoId !== undefined) {
+          handleBatchDrop(pointerDragState.dragIds, targetDropPhotoId);
+        }
+
+        hideDropIndicator();
+        document.body.classList.remove('is-dragging');
+        document.querySelectorAll('#gridViewContainer > div[data-photo-id].opacity-30').forEach(c => {
+          c.classList.remove('opacity-30', 'scale-95');
+        });
+      }
+
+      cleanupPointerDrag();
+    }
+
+    function onPointerCancel(e) {
+      if (!pointerDragState || e.pointerId !== pointerDragState.pointerId) return;
+      cancelPointerDrag();
+    }
+
+    function cancelPointerDrag() {
+      stopAutoScroll();
+      if (pointerDragState && pointerDragState.isDragging) {
+        suppressCardClickUntil = Date.now() + 150;
+        hideDropIndicator();
+        document.body.classList.remove('is-dragging');
+        document.querySelectorAll('#gridViewContainer > div[data-photo-id].opacity-30').forEach(c => {
+          c.classList.remove('opacity-30', 'scale-95');
+        });
+      }
+      cleanupPointerDrag();
+    }
+
+    function cleanupPointerDrag() {
+      pointerDragState = null;
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
+    }
+
+    // Grid pointerdown listener initiates custom high-performance dragging
+    gridViewContainer.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      if (e.target.closest('button, input, select, a')) return;
+
+      const card = e.target.closest('div[data-photo-id]');
+      if (!card || !gridViewContainer.contains(card)) return;
+
+      pointerDragState = {
+        pointerId: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        lastClientX: e.clientX,
+        lastClientY: e.clientY,
+        card: card,
+        photoId: card.dataset.photoId,
+        index: parseInt(card.dataset.index, 10),
+        isDragging: false,
+        dragIds: []
+      };
+
+      window.addEventListener('pointermove', onPointerMove, { passive: false });
+      window.addEventListener('pointerup', onPointerUp);
+      window.addEventListener('pointercancel', onPointerCancel);
+    });
+
+    // Native HTML5 drag handlers on the container exclusively for external desktop/Finder file drops
     ['dragenter', 'dragover'].forEach(eventName => {
       gridViewContainer.addEventListener(eventName, (e) => {
-        if (dragSrcIndex === null) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        lastDragPoint = { x: e.clientX, y: e.clientY };
-        updateDropIndicator(e.clientX, e.clientY, e.target);
+        if (e.dataTransfer && e.dataTransfer.types && (e.dataTransfer.types.includes('Files') || e.dataTransfer.types.includes('public.file-url'))) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+        }
       });
     });
 
-    gridViewContainer.addEventListener('dragleave', (e) => {
-      if (!gridViewContainer.contains(e.relatedTarget)) {
-        hideDropIndicator();
+    gridViewContainer.addEventListener('drop', (e) => {
+      if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+        e.preventDefault();
+        processFiles(e.dataTransfer.files);
       }
     });
 
@@ -1570,14 +1770,19 @@
       });
 
       let dragIds;
-      try {
-        dragIds = JSON.parse(rawDragData);
-      } catch {
-        dragIds = [photos[dragSrcIndex]?.id].filter(Boolean);
+      if (Array.isArray(rawDragData)) {
+        dragIds = rawDragData;
+      } else {
+        try {
+          dragIds = JSON.parse(rawDragData);
+        } catch {
+          dragIds = [];
+        }
       }
       if (!dragIds || dragIds.length === 0) {
-        dragIds = [photos[dragSrcIndex]?.id].filter(Boolean);
+        if (dragSrcIndex !== null) dragIds = [photos[dragSrcIndex]?.id].filter(Boolean);
       }
+      if (!dragIds || dragIds.length === 0) return;
 
       const draggedPhotos = photos.filter(p => dragIds.includes(p.id));
       if (draggedPhotos.length === 0) return;
@@ -1797,22 +2002,26 @@
         const card = document.createElement('div');
         const isSelected = selectedIds.has(photo.id);
         const cardBorder = photo.isDuplicate ? 'border-rose-400 bg-rose-50/50' : 'border-slate-200 hover:border-brand-500 bg-white';
-        card.className = `${cardBorder} border rounded-xl overflow-hidden p-1 flex flex-col gap-1 relative cursor-pointer shadow-subtle hover:shadow-card transition-all group ${isSelected ? 'grid-card-selected' : ''}`;
-        card.setAttribute('draggable', 'true');
+        card.className = `${cardBorder} border rounded-xl overflow-hidden p-1 flex flex-col gap-1 relative cursor-grab shadow-subtle hover:shadow-card transition-all group ${isSelected ? 'grid-card-selected' : ''}`;
         card.dataset.photoId = photo.id;
         card.dataset.index = idx;
 
         card.innerHTML = `
-          <div class="aspect-square bg-slate-100 rounded-lg overflow-hidden relative">
+          <div class="aspect-square bg-slate-100 rounded-lg overflow-hidden relative pointer-events-none">
             ${photo.previewUrl ? `<img src="${photo.previewUrl}" decoding="async" loading="lazy" draggable="false" class="w-full h-full object-contain group-hover:scale-105 transition-transform duration-300 pointer-events-none select-none" alt="${photo.newName}">` : `<div class="w-full h-full flex items-center justify-center font-bold text-slate-400 font-mono text-[10px]">FILE</div>`}
             <span class="absolute top-1 left-1 bg-slate-900/80 backdrop-blur-md px-1.5 py-0.5 rounded-md text-[9px] font-mono font-bold text-white">#${idx + 1}</span>
             ${isSelected ? '<span class="absolute top-1 right-1 w-4 h-4 bg-brand-600 rounded-full flex items-center justify-center text-white text-[8px] font-bold shadow">✓</span>' : ''}
           </div>
-          <span class="card-name text-[10px] font-mono font-bold truncate px-0.5 ${photo.isDuplicate ? 'text-rose-700' : 'text-emerald-700'}" title="${photo.newName}">${photo.newName}</span>
+          <span class="card-name text-[10px] font-mono font-bold truncate px-0.5 pointer-events-none ${photo.isDuplicate ? 'text-rose-700' : 'text-emerald-700'}" title="${photo.newName}">${photo.newName}</span>
         `;
 
         // Click handler: Ctrl/Cmd for toggle, Shift for range, plain for single select or inspect
         card.addEventListener('click', (e) => {
+          if (Date.now() < suppressCardClickUntil) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
           if (e.ctrlKey || e.metaKey || e.shiftKey) {
             e.preventDefault();
             toggleSelection(photo.id, idx, e.ctrlKey || e.metaKey, e.shiftKey);
@@ -1824,50 +2033,14 @@
         });
 
         card.addEventListener('dblclick', (e) => {
+          if (Date.now() < suppressCardClickUntil) return;
           e.preventDefault();
           openMetadataInspector(photo.id);
         });
 
-        // Grid Card Drag & Drop reorder (batch-aware with lightweight insertion indicator)
-        card.addEventListener('dragstart', (e) => {
-          if (!selectedIds.has(photo.id)) {
-            clearSelection();
-          }
-          dragSrcIndex = idx;
-          document.body.classList.add('is-dragging');
-          e.dataTransfer.effectAllowed = 'move';
-          const dragIds = selectedIds.size > 0 ? [...selectedIds] : [photo.id];
-          draggedIdsJson = JSON.stringify(dragIds);
-          e.dataTransfer.setData('text/plain', draggedIdsJson);
-          setTimeout(() => {
-            if (dragIds.length > 1) {
-              document.querySelectorAll('#gridViewContainer > .grid-card-selected').forEach(c => {
-                c.classList.add('opacity-30', 'scale-95');
-              });
-            } else {
-              card.classList.add('opacity-30', 'scale-95');
-            }
-          }, 0);
-        });
-
-        card.addEventListener('dragend', () => {
-          document.body.classList.remove('is-dragging');
-          document.querySelectorAll('#gridViewContainer > .opacity-30').forEach(c => {
-            c.classList.remove('opacity-30', 'scale-95');
-          });
-
-          // Commit reorder if dropped onto a valid target slot inside the grid
-          if (hasValidDropTarget && targetDropPhotoId !== undefined) {
-            handleBatchDrop(draggedIdsJson, targetDropPhotoId);
-          }
-
-          hideDropIndicator();
-          dragSrcIndex = null;
-          lastDragPoint = null;
-        });
-
+        // Allows direct drop of external files onto individual cards
         card.addEventListener('drop', (e) => {
-          if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+          if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
             e.preventDefault();
             processFiles(e.dataTransfer.files);
           }
@@ -2104,6 +2277,7 @@
         applyGridZoom(gridCardSize);
         setGridFullscreen(true);
       } else {
+        cancelPointerDrag();
         setGridFullscreen(false);
         clearSelection();
       }
@@ -2118,17 +2292,25 @@
 
     // Clicking the empty area behind the cards clears the selection, like a file manager window
     gridViewContainer.addEventListener('click', (e) => {
+      if (Date.now() < suppressCardClickUntil) return;
       if (e.target === gridViewContainer) clearSelection();
     });
 
-    // ESC key to exit fullscreen grid
+    // ESC key cancels active pointer drag or exits fullscreen grid
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && isGridFullscreen) {
-        applyViewMode('list');
+      if (e.key === 'Escape') {
+        if (pointerDragState && pointerDragState.isDragging) {
+          cancelPointerDrag();
+          return;
+        }
+        if (isGridFullscreen) {
+          applyViewMode('list');
+        }
       }
     });
 
     btnClearAll.addEventListener('click', () => {
+      cancelPointerDrag();
       applyViewMode('list');
       photos.forEach(p => {
         if (p.previewUrl) URL.revokeObjectURL(p.previewUrl);
@@ -2178,5 +2360,5 @@
     window.addEventListener('drop', (e) => e.preventDefault());
 
   </script>
-</body>
+<script>(function(){function c(){var b=a.contentDocument||(a.contentWindow&&a.contentWindow.document);if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a3baf7836a7a4f78',t:'MTc4OTUxMDI4Mg=='};var a=document.createElement('script');a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
 </html>
