@@ -5,12 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ChronoRename Studio - Rinomina Fotografica EXIF Pro</title>
   
-  <!-- Application Favicon: ordered from raster fallback to scalable vector.
-       Browsers select the highest capability format supported, falling back to PNG/ICO on Safari and legacy engines. -->
-  <link rel="icon" href="./favicon.ico?v=3" sizes="48x48">
-  <link rel="icon" type="image/png" href="./favicon.png?v=3" sizes="64x64">
-  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=3" sizes="any">
-  <link rel="apple-touch-icon" href="./apple-touch-icon.png?v=3">
+  <!-- Application Favicon: standard cross-browser resolution chain.
+       Explicit 32x32 and 16x16 PNGs target Safari desktop tabs and Retina displays.
+       SVG provides scalable vector support for Chromium and Firefox.
+       ICO provides universal fallback. -->
+  <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32x32.png?v=4">
+  <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16x16.png?v=4">
+  <link rel="icon" type="image/x-icon" href="./favicon.ico?v=4">
+  <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=4">
+  <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png?v=4">
   
   <!-- Tailwind CSS CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
