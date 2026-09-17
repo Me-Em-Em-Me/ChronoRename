@@ -4,7 +4,7 @@ A client-side photo sorting and batch renaming studio designed for macOS photogr
 
 ## Architecture & Technology Stack
 
-- **Zero-Build Single File**: `index.html` contains the entire application (HTML, CSS via Tailwind CDN, and vanilla ES6+ JavaScript).
+- **Zero-Build Single File**: `index.html` contains the entire application (HTML, CSS via Tailwind CDN, vanilla ES6+ JavaScript, and self-contained inline Data URI favicons for zero external asset dependencies).
 - **Client-Side Privacy**: Runs completely offline in the browser. Photos never leave the user's computer.
 - **EXIF / XMP Engine**: Powered by `exifr` (Full UMD bundle) with binary fallbacks for XMP packet extraction and SubSecTimeOriginal sub-second burst parsing.
 - **High-Performance Memory & Thumbnail Engine**: Multi-tier client-side thumbnailing combining instant embedded EXIF preview extraction via `exifr.thumbnailUrl` with native `createImageBitmap`/Canvas downscaling (400px bounds) and `decoding="async"`. Prevents VRAM exhaustion and browser freezing when loading hundreds of high-resolution DSLR/mirrorless RAW and JPEG files.
